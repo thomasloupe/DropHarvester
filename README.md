@@ -8,6 +8,12 @@ a number of extra features.
 > **Note:** this automates Twitch's private API, which is against Twitch's Terms
 > of Service. It's a tool for personal use - use it at your own discretion.
 
+## Screenshots
+
+| Status | Settings |
+| :---: | :---: |
+| ![Status tab](docs/screenshots/1.webp) | ![Settings tab](docs/screenshots/2.webp) |
+
 ## Features
 
 ### Core harvesting
