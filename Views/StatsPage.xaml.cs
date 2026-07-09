@@ -54,9 +54,10 @@ public partial class StatsPage : ContentPage
 
         var day = _chartDays[idx];
         var drops = _vm.DropsOn(day);
+        // header line with the date + count, then one drop per line so a busy day stays readable
         ChartTooltip.Text = drops.Count == 0
             ? $"{day:MMM d}: no drops claimed"
-            : $"{day:MMM d} ({drops.Count}): {string.Join(", ", drops)}";
+            : $"{day:MMM d} ({drops.Count}):\n{string.Join("\n", drops)}";
         ChartTooltip.IsVisible = true;
     }
 

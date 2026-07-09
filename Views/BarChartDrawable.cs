@@ -17,10 +17,12 @@ public sealed class BarChartDrawable : IDrawable
         if (Bars.Count == 0)
             return;
 
-        const float labelH = 18f;
+        const float labelH = 18f;   // x-axis label row along the bottom
+        const float valueH = 16f;   // headroom at the top so the tallest bar's value label sits above it
         const float gap = 8f;
         var max = Math.Max(1, Bars.Max(b => b.value));
-        var barAreaH = rect.Height - labelH - 6;
+        var barAreaH = rect.Height - labelH - valueH - 6;
+        var baseline = rect.Top + valueH + barAreaH; // y of the bar bottoms
         var barW = (rect.Width - gap * (Bars.Count + 1)) / Bars.Count;
 
         canvas.FontSize = 11;
@@ -29,7 +31,7 @@ public sealed class BarChartDrawable : IDrawable
             var (label, value) = Bars[i];
             var x = rect.Left + gap + i * (barW + gap);
             var h = (float)value / max * barAreaH;
-            var y = rect.Top + barAreaH - h;
+            var y = baseline - h;
 
             canvas.FillColor = BarColor;
             canvas.FillRoundedRectangle(x, y, barW, h, 4);

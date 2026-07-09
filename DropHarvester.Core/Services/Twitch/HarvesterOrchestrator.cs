@@ -119,6 +119,9 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
     volatile bool _forcedDropOnly;
     // campaign ids that existed when the current override was set (used to yield only to NEWER campaigns)
     HashSet<string> _knownAtOverride = new(StringComparer.OrdinalIgnoreCase);
+    // when the current override was set - a campaign can only yield the override if it also STARTED after
+    // this (so a campaign released earlier that we merely discovered late never counts as "new")
+    DateTimeOffset _overrideSetUtc = DateTimeOffset.MinValue;
     DateTimeOffset _lastCampaignFetch = DateTimeOffset.MinValue;
     // harvesting loop's private snapshot: replaced (never mutated in place) so it can't be enumerated while
     // the UI-bound Campaigns collection is rebuilt on the UI thread ("Collection was modified")
@@ -283,6 +286,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
         _forcedDropOnly = dropOnly;
         var known = _campaigns; // capture the atomically-swapped ref before enumerating
         _knownAtOverride = new HashSet<string>(known.Select(c => c.Id), StringComparer.OrdinalIgnoreCase);
+        _overrideSetUtc = DateTimeOffset.UtcNow; // the "released after this = new" cutoff for yielding
         _switchRequested = true; // re-pick now, honoring the override
         Wake();
         Log(dropOnly
@@ -1404,7 +1408,11 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
         {
             if (ReferenceEquals(c, target))
                 break;
-            if (_knownAtOverride.Contains(c.Id))
+            // "new" means it was BOTH not known when the override was set AND actually started afterwards.
+            // A campaign released earlier (e.g. this morning's daily) that we simply hadn't fetched yet at
+            // override time must NOT end the override - the user deliberately overrode past it. Requiring
+            // StartsAt > cutoff makes this robust to fetch timing and daily-instance id churn.
+            if (_knownAtOverride.Contains(c.Id) || c.StartsAt <= _overrideSetUtc)
                 continue;
             var live = await _channels.FetchLiveChannelsForGameAsync(c.Game, 1, ct).ConfigureAwait(false);
             if (live.Any())

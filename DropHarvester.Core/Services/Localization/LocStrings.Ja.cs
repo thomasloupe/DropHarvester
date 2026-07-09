@@ -83,7 +83,7 @@ public static partial class LocStrings
         // ----- Stats page -----
         ["Stats_DropsClaimed"] = "受け取った Drops",
         ["Stats_CampaignsDone"] = "完了したキャンペーン",
-        ["Stats_WatchTimeSaved"] = "節約した視聴時間",
+        ["Stats_WatchTimeSaved"] = "収穫に費やした時間",
         ["Stats_DropsClaimedLast7Days"] = "受け取った Drops (過去 7 日間)",
         ["Stats_ExportCsv"] = "CSV をエクスポート",
         ["Stats_ExportJson"] = "JSON をエクスポート",

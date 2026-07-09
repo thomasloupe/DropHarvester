@@ -83,7 +83,7 @@ public static partial class LocStrings
         // ----- Stats page -----
         ["Stats_DropsClaimed"] = "已领取 Drops",
         ["Stats_CampaignsDone"] = "已完成活动",
-        ["Stats_WatchTimeSaved"] = "节省的观看时间",
+        ["Stats_WatchTimeSaved"] = "收获时长",
         ["Stats_DropsClaimedLast7Days"] = "已领取 DROPS（最近 7 天）",
         ["Stats_ExportCsv"] = "导出 CSV",
         ["Stats_ExportJson"] = "导出 JSON",

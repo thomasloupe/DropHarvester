@@ -477,9 +477,7 @@ public partial class StatusViewModel : ObservableViewModel
                 }
                 break;
             case WebsocketStatusEvent w:
-                WebsocketStatus = w.Shards == 0
-                    ? "disconnected"
-                    : $"{w.Shards} shard(s) - {w.Topics} topic(s) - {(w.AllConnected ? "connected" : "connecting")}";
+                ApplyWebsocketStatus(w);
                 break;
             case LoginExpiredEvent:
                 LoginHint = Loc.T("Login_Expired");
@@ -487,6 +485,52 @@ public partial class StatusViewModel : ObservableViewModel
                 break;
         }
     });
+
+    WebsocketStatusEvent? _lastWs;
+    int _wsStatusGen;
+
+    /// <summary>Set the websocket status line. "connected" and "disconnected" show at once; "connecting"
+    /// shows only after the pool stays not-fully-connected for a short grace period, so a quick reconnect
+    /// keeps the indicator steady on "connected" rather than blinking between the two.</summary>
+    /// <param name="w">The latest websocket status event.</param>
+    void ApplyWebsocketStatus(WebsocketStatusEvent w)
+    {
+        _lastWs = w;
+        if (w.Shards == 0)
+        {
+            _wsStatusGen++;
+            WebsocketStatus = "disconnected";
+            return;
+        }
+        if (w.AllConnected)
+        {
+            _wsStatusGen++; // supersedes any pending "connecting"
+            WebsocketStatus = WsLine(w, "connected");
+            return;
+        }
+        var gen = ++_wsStatusGen;
+        _ = ShowConnectingIfStillDownAsync(gen);
+    }
+
+    /// <summary>After the grace period, show "connecting" only if this is still the latest status and the
+    /// pool is still not fully connected.</summary>
+    /// <param name="gen">The status generation this call waits on.</param>
+    async Task ShowConnectingIfStillDownAsync(int gen)
+    {
+        try { await Task.Delay(TimeSpan.FromSeconds(8)).ConfigureAwait(false); }
+        catch { return; }
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            if (gen != _wsStatusGen || _lastWs is not { } w || w.AllConnected || w.Shards == 0)
+                return;
+            WebsocketStatus = WsLine(w, "connecting");
+        });
+    }
+
+    /// <summary>Formats the websocket status line for a shard/topic count and state word.</summary>
+    /// <param name="w">The status event supplying the shard/topic counts.</param>
+    /// <param name="state">The connection state word to show.</param>
+    static string WsLine(WebsocketStatusEvent w, string state) => $"{w.Shards} shard(s) - {w.Topics} topic(s) - {state}";
 
     /// <summary>Updates the active-drop display (name, progress, remaining, image) from the given drop, clearing it when null.</summary>
     /// <param name="drop">The active drop to show, or null to clear the display.</param>

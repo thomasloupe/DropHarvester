@@ -83,7 +83,7 @@ public static partial class LocStrings
         // ----- Stats page -----
         ["Stats_DropsClaimed"] = "수령한 Drop",
         ["Stats_CampaignsDone"] = "완료한 캠페인",
-        ["Stats_WatchTimeSaved"] = "절약한 시청 시간",
+        ["Stats_WatchTimeSaved"] = "수확에 보낸 시간",
         ["Stats_DropsClaimedLast7Days"] = "수령한 DROP (최근 7일)",
         ["Stats_ExportCsv"] = "CSV 내보내기",
         ["Stats_ExportJson"] = "JSON 내보내기",

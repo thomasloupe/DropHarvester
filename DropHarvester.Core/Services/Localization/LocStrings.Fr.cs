@@ -83,7 +83,7 @@ public static partial class LocStrings
         // ----- Stats page -----
         ["Stats_DropsClaimed"] = "Drops réclamés",
         ["Stats_CampaignsDone"] = "Campagnes terminées",
-        ["Stats_WatchTimeSaved"] = "Temps de visionnage économisé",
+        ["Stats_WatchTimeSaved"] = "Temps passé à récolter",
         ["Stats_DropsClaimedLast7Days"] = "DROPS RÉCLAMÉS (7 DERNIERS JOURS)",
         ["Stats_ExportCsv"] = "Exporter en CSV",
         ["Stats_ExportJson"] = "Exporter en JSON",
