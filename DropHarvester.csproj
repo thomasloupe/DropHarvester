@@ -1,0 +1,110 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<!-- Cross-platform desktop app (Windows + macOS). We target each desktop OS on its
+		     native build host so `dotnet build` just works on each machine (Windows -> WinUI,
+		     macOS -> Mac Catalyst). Tray/menu-bar, notifications and autostart are implemented
+		     per-platform behind a shared interface. -->
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">net10.0-windows10.0.19041.0</TargetFrameworks>
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('osx'))">net10.0-maccatalyst</TargetFrameworks>
+
+		<!-- Note for MacCatalyst:
+		The default runtime is maccatalyst-x64, except in Release config, in which case the default is maccatalyst-x64;maccatalyst-arm64.
+		When specifying both architectures, use the plural <RuntimeIdentifiers> instead of the singular <RuntimeIdentifier>.
+		The Mac App Store will NOT accept apps with ONLY maccatalyst-arm64 indicated;
+		either BOTH runtimes must be indicated or ONLY macatalyst-x64. -->
+		<!-- For example: <RuntimeIdentifiers>maccatalyst-x64;maccatalyst-arm64</RuntimeIdentifiers> -->
+
+		<OutputType>Exe</OutputType>
+		<RootNamespace>DropHarvester</RootNamespace>
+		<UseMaui>true</UseMaui>
+		<SingleProject>true</SingleProject>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+
+		<!-- MVVMTK0045 recommends partial-property [ObservableProperty] for WinRT AOT marshalling.
+		     This app isn't AOT-compiled and the bundled generator doesn't emit partial-property
+		     implementations here, so we use field-based [ObservableProperty] and silence the hint. -->
+		<NoWarn>$(NoWarn);MVVMTK0045</NoWarn>
+
+		<!-- Enable XAML source generation for faster build times and improved performance. -->
+		<MauiXamlInflator>SourceGen</MauiXamlInflator>
+
+		<!-- Display name -->
+		<ApplicationTitle>DropHarvester</ApplicationTitle>
+
+		<!-- App Identifier -->
+		<ApplicationId>com.dropharvester.app</ApplicationId>
+
+		<!-- Versions. We use a 3-part semver (MAJOR.MINOR.PATCH) everywhere the app reports or
+		     compares its version. MAUI's resizetizer requires ApplicationDisplayVersion to be a
+		     valid 3-part semver, so keep it at 3 parts.
+		     ApplicationVersion is a SEPARATE monotonically-increasing integer build counter (it maps
+		     to the macOS CFBundleVersion, where going backwards blocks a .pkg upgrade), so it does
+		     not track the semver and must only ever increase. -->
+		<ApplicationDisplayVersion>1.11.0</ApplicationDisplayVersion>
+		<ApplicationVersion>21000</ApplicationVersion>
+		<Version>1.11.0</Version>
+		<AssemblyVersion>1.11.0</AssemblyVersion>
+		<FileVersion>1.11.0</FileVersion>
+		<InformationalVersion>1.11.0</InformationalVersion>
+
+		<!-- Unpackaged Windows app. -->
+		<WindowsPackageType>None</WindowsPackageType>
+
+		<!-- The installed Mac Catalyst workload may pin an Xcode older than the one on the build
+		     Mac; the newer Xcode is compatible for our needs, so skip the strict version gate. -->
+		<ValidateXcodeVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">false</ValidateXcodeVersion>
+
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
+		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- App Icon (scythe). MAUI requires resource image names to be lowercase with no
+		     hyphens, so the file is harvester_icon.png. The PNG has a transparent background and
+		     we intentionally set NO Color here, so the generated app / tray / Start-menu icons keep
+		     that transparency instead of resizetizer filling the background with a solid color. -->
+		<MauiIcon Include="Resources\AppIcon\harvester_icon.png" />
+
+		<!-- Splash Screen -->
+		<MauiSplashScreen Include="Resources\AppIcon\harvester_icon.png" Color="#0E0F13" BaseSize="128,128" />
+
+		<!-- Images -->
+		<MauiImage Include="Resources\Images\*" />
+
+		<!-- Custom Fonts -->
+		<MauiFont Include="Resources\Fonts\*" />
+
+		<!-- Raw Assets (also remove the "Resources\Raw" prefix) -->
+		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+	</ItemGroup>
+
+	<!-- The harvesting engine lives in DropHarvester.Core and the headless service in DropHarvester.Daemon,
+	     both nested in this folder as SEPARATE projects. Exclude their sources from this app's default
+	     globs so MAUI doesn't try to double-compile them, and reference Core for the shared engine. -->
+	<ItemGroup>
+		<Compile Remove="DropHarvester.Core\**\*.cs" />
+		<Compile Remove="DropHarvester.Daemon\**\*.cs" />
+		<None Remove="DropHarvester.Core\**\*" />
+		<None Remove="DropHarvester.Daemon\**\*" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="DropHarvester.Core\DropHarvester.Core.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
+		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+	</ItemGroup>
+
+	<!-- NAudio powers the drop-claimed sound on Windows (any format + output-device selection).
+	     Windows-only; macOS uses AVFoundation in Platforms/MacCatalyst. -->
+	<ItemGroup Condition="$(TargetFramework.Contains('-windows'))">
+		<PackageReference Include="NAudio" Version="2.2.1" />
+	</ItemGroup>
+
+</Project>

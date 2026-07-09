@@ -1,0 +1,544 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:DropHarvester.ViewModels"
+             xmlns:tw="clr-namespace:DropHarvester.Services.Twitch"
+             xmlns:sys="clr-namespace:System;assembly=netstandard"
+             xmlns:loc="clr-namespace:DropHarvester.Localization"
+             x:Class="DropHarvester.Views.SettingsPage"
+             x:DataType="vm:SettingsViewModel"
+             Title="Settings"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="{StaticResource DhBg}">
+    <Grid ColumnDefinitions="Auto,*">
+
+        <!-- ===== Left navigation: click to jump to a section ===== -->
+        <ScrollView Grid.Column="0" BackgroundColor="{StaticResource DhSurface}" WidthRequest="190">
+            <VerticalStackLayout Padding="10,18" Spacing="2">
+                <Label Text="{loc:Tr Settings_Settings}" Style="{StaticResource SectionLabel}" Margin="8,0,0,8" />
+                <Button Text="{loc:Tr Settings_LanguageNav}" Style="{StaticResource NavButton}" CommandParameter="SecLanguage" Clicked="OnNavClicked" />
+                <Button Text="{loc:Tr Settings_NavUpdates}" Style="{StaticResource NavButton}" CommandParameter="SecUpdates" Clicked="OnNavClicked" />
+                <Button Text="{loc:Tr Settings_NavHarvesting}" Style="{StaticResource NavButton}" CommandParameter="SecHarvesting" Clicked="OnNavClicked" />
+                <Button Text="{loc:Tr Settings_NavPriorityGames}" Style="{StaticResource NavButton}" CommandParameter="SecPriority" Clicked="OnNavClicked" />
+                <Button Text="{loc:Tr Settings_NavExcludedGames}" Style="{StaticResource NavButton}" CommandParameter="SecExcluded" Clicked="OnNavClicked" />
+                <Button Text="{loc:Tr Settings_NavDedupeGames}" Style="{StaticResource NavButton}" CommandParameter="SecDedupe" Clicked="OnNavClicked" />
+                <Button Text="{loc:Tr Settings_NavUnlinkedGames}" Style="{StaticResource NavButton}" CommandParameter="SecUnlinked" Clicked="OnNavClicked" />
+                <Button Text="{loc:Tr Settings_NavPreferredChannels}" Style="{StaticResource NavButton}" CommandParameter="SecPreferred" Clicked="OnNavClicked" />
+                <Button Text="{loc:Tr Settings_NavAvoidedChannels}" Style="{StaticResource NavButton}" CommandParameter="SecAvoided" Clicked="OnNavClicked" />
+                <Button Text="{loc:Tr Settings_NavDropSound}" Style="{StaticResource NavButton}" CommandParameter="SecSound" Clicked="OnNavClicked" />
+                <Button Text="{loc:Tr Settings_NavNotifications}" Style="{StaticResource NavButton}" CommandParameter="SecNotifications" Clicked="OnNavClicked" />
+                <Button Text="{loc:Tr Settings_NavWebhookAlerts}" Style="{StaticResource NavButton}" CommandParameter="SecWebhook" Clicked="OnNavClicked" />
+                <Button Text="{loc:Tr Settings_NavLog}" Style="{StaticResource NavButton}" CommandParameter="SecLog" Clicked="OnNavClicked" />
+                <Button Text="{loc:Tr Settings_NavApplication}" Style="{StaticResource NavButton}" CommandParameter="SecApp" Clicked="OnNavClicked" />
+                <Button Text="{loc:Tr Settings_NavDebugServer}" Style="{StaticResource NavButton}" CommandParameter="SecDebug" Clicked="OnNavClicked" />
+            </VerticalStackLayout>
+        </ScrollView>
+
+        <ScrollView Grid.Column="1" x:Name="ContentScroll">
+            <VerticalStackLayout Padding="20" Spacing="16">
+
+            <!-- ===== Language ===== -->
+            <Border x:Name="SecLanguage" Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="{loc:Tr Settings_Language}" Style="{StaticResource SectionLabel}" />
+                    <Picker ItemsSource="{Binding LanguageNames}" SelectedIndex="{Binding LanguageIndex}"
+                            TextColor="{StaticResource DhText}" TitleColor="{StaticResource DhMuted}" WidthRequest="220"
+                            HorizontalOptions="Start" />
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ===== Updates (top of page) ===== -->
+            <Border x:Name="SecUpdates" Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="{loc:Tr Settings_Updates}" Style="{StaticResource SectionLabel}" />
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="{loc:Tr Settings_AutoCheckUpdates}" Style="{StaticResource Body}" VerticalOptions="Center" />
+                        <Switch Grid.Column="1" IsToggled="{Binding AutoCheckForUpdates}" OnColor="{StaticResource DhAccent}" />
+                    </Grid>
+                    <Label Text="{loc:Tr Settings_UpdatesDescription}"
+                           Style="{StaticResource Muted}" FontSize="12" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                        <Label Text="{Binding CurrentVersionText}" Style="{StaticResource Muted}" FontSize="12" VerticalOptions="Center" />
+                        <Button Grid.Column="1" Text="{loc:Tr Settings_CheckNow}" Style="{StaticResource GhostButton}" MinimumWidthRequest="120"
+                                IsEnabled="{Binding CheckingForUpdates, Converter={StaticResource InvertBool}}"
+                                Command="{Binding CheckForUpdatesCommand}" />
+                    </Grid>
+                    <Label Text="{Binding UpdateCheckStatus}" Style="{StaticResource Muted}" FontSize="12"
+                           IsVisible="{Binding UpdateCheckStatus, Converter={StaticResource StringNotEmpty}}" />
+                    <!-- Shown only when a newer installer has been downloaded - installs it without a trip to the Status tab. -->
+                    <Button Text="{loc:Tr Settings_UpdateNow}" Style="{StaticResource PrimaryButton}" HorizontalOptions="Start" MinimumWidthRequest="150"
+                            IsVisible="{Binding UpdateReady}" Command="{Binding UpdateNowCommand}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ===== Harvesting behavior ===== -->
+            <Border x:Name="SecHarvesting" Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="{loc:Tr Settings_Harvesting}" Style="{StaticResource SectionLabel}" />
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="{loc:Tr Settings_HarvestOnlyPriority}" Style="{StaticResource Body}" VerticalOptions="Center" />
+                        <Switch Grid.Column="1" IsToggled="{Binding PriorityOnly}" OnColor="{StaticResource DhAccent}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <VerticalStackLayout>
+                            <Label Text="{loc:Tr Settings_PrioritizeEndingSoonest}" Style="{StaticResource Body}" />
+                            <Label Text="{loc:Tr Settings_PrioritizeEndingSoonestDescription}" Style="{StaticResource Muted}" FontSize="12" />
+                        </VerticalStackLayout>
+                        <Switch Grid.Column="1" IsToggled="{Binding EndingSoonest}" OnColor="{StaticResource DhAccent}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <VerticalStackLayout>
+                            <Label Text="{loc:Tr Settings_PrioritizeByAvailability}" Style="{StaticResource Body}" />
+                            <Label Text="{loc:Tr Settings_PrioritizeByAvailabilityDescription}" Style="{StaticResource Muted}" FontSize="12" />
+                        </VerticalStackLayout>
+                        <Switch Grid.Column="1" IsToggled="{Binding AvailabilityPriority}" OnColor="{StaticResource DhAccent}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <VerticalStackLayout>
+                            <Label Text="{loc:Tr Settings_HarvestImpossibleDrops}" Style="{StaticResource Body}" />
+                            <Label Text="{loc:Tr Settings_HarvestImpossibleDropsDescription}" Style="{StaticResource Muted}" FontSize="12" />
+                        </VerticalStackLayout>
+                        <Switch Grid.Column="1" IsToggled="{Binding HarvestImpossibleDrops}" OnColor="{StaticResource DhAccent}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <VerticalStackLayout>
+                            <Label Text="{loc:Tr Settings_ShowUnlinkedInChannels}" Style="{StaticResource Body}" />
+                            <Label Text="{loc:Tr Settings_ShowUnlinkedInChannelsDescription}" Style="{StaticResource Muted}" FontSize="12" />
+                        </VerticalStackLayout>
+                        <Switch Grid.Column="1" IsToggled="{Binding ShowUnlinkedInChannels}" OnColor="{StaticResource DhAccent}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="{loc:Tr Settings_IncludeBadgeEmote}" Style="{StaticResource Body}" VerticalOptions="Center" />
+                        <Switch Grid.Column="1" IsToggled="{Binding EnableBadgesEmotes}" OnColor="{StaticResource DhAccent}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="{loc:Tr Settings_AutoClaimChannelPoints}" Style="{StaticResource Body}" VerticalOptions="Center" />
+                        <Switch Grid.Column="1" IsToggled="{Binding AutoClaimChannelPoints}" OnColor="{StaticResource DhAccent}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                        <VerticalStackLayout>
+                            <Label Text="{loc:Tr Settings_WhenOverridingHarvest}" Style="{StaticResource Body}" />
+                            <Label Text="{loc:Tr Settings_WhenOverridingHarvestDescription}" Style="{StaticResource Muted}" FontSize="12" />
+                        </VerticalStackLayout>
+                        <Picker Grid.Column="1" WidthRequest="180" VerticalOptions="Center"
+                                SelectedIndex="{Binding OverrideModeIndex}"
+                                ItemsSource="{Binding OverrideModeNames}"
+                                TextColor="{StaticResource DhText}" TitleColor="{StaticResource DhMuted}"
+                                BackgroundColor="{StaticResource DhSurface2}" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ===== Priority games ===== -->
+            <Border x:Name="SecPriority" Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="{loc:Tr Settings_PriorityGames}" Style="{StaticResource SectionLabel}" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <Entry Text="{Binding NewPriorityGame}" Placeholder="{loc:Tr Settings_StartTypingGameName}"
+                               TextColor="{StaticResource DhText}" PlaceholderColor="{StaticResource DhMuted}" />
+                        <Button Grid.Column="1" Text="{loc:Tr Settings_Add}" Style="{StaticResource GhostButton}"
+                                MinimumWidthRequest="80" Command="{Binding AddPriorityCommand}" />
+                    </Grid>
+                    <!-- autocomplete suggestions -->
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding PrioritySuggestions}" Spacing="0">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="tw:GameMatch">
+                                <Button Text="{Binding Name}" HorizontalOptions="Fill"
+                                        BackgroundColor="{StaticResource DhSurface2}" TextColor="{StaticResource DhText}"
+                                        FontSize="14" HeightRequest="38" CornerRadius="6" Margin="0,2"
+                                        Command="{Binding Path=BindingContext.SelectPriorityCommand, Source={RelativeSource AncestorType={x:Type ContentPage}}}"
+                                        CommandParameter="{Binding .}" />
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                    <Label Text="{Binding PriorityHint}" TextColor="{StaticResource DhGold}" FontSize="12"
+                           IsVisible="{Binding PriorityHint, Converter={StaticResource StringNotEmpty}}" />
+                    <Label Text="{loc:Tr Settings_DragToReorder}" Style="{StaticResource Muted}" FontSize="12"
+                           IsVisible="{Binding PriorityGames.Count, Converter={StaticResource IntIsPositive}}" />
+                    <!-- Drag via PanGestureRecognizer (native drag-drop's Drop event doesn't fire in an
+                         unpackaged WinUI app); the arrow buttons are a guaranteed fallback. -->
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding PriorityGames}" Spacing="4">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="sys:String">
+                                <Border BackgroundColor="{StaticResource DhSurface2}" StrokeThickness="0" Padding="6,2" Margin="0,1">
+                                    <Border.StrokeShape>
+                                        <RoundRectangle CornerRadius="6" />
+                                    </Border.StrokeShape>
+                                    <Border.GestureRecognizers>
+                                        <PanGestureRecognizer PanUpdated="OnPriorityPan" />
+                                    </Border.GestureRecognizers>
+                                    <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="2">
+                                        <Label Text="&#x2261;" FontSize="18" TextColor="{StaticResource DhMuted}" VerticalOptions="Center" Margin="2,0,4,0" />
+                                        <Label Grid.Column="1" Text="{Binding .}" Style="{StaticResource Body}" VerticalOptions="Center" />
+                                        <Button Grid.Column="2" Text="&#x2191;" WidthRequest="36" HeightRequest="34" Padding="0" Style="{StaticResource GhostButton}"
+                                                Command="{Binding Path=BindingContext.MoveUpCommand, Source={RelativeSource AncestorType={x:Type ContentPage}}}"
+                                                CommandParameter="{Binding .}" />
+                                        <Button Grid.Column="3" Text="&#x2193;" WidthRequest="36" HeightRequest="34" Padding="0" Style="{StaticResource GhostButton}"
+                                                Command="{Binding Path=BindingContext.MoveDownCommand, Source={RelativeSource AncestorType={x:Type ContentPage}}}"
+                                                CommandParameter="{Binding .}" />
+                                        <Button Grid.Column="4" Text="&#x2715;" WidthRequest="36" HeightRequest="34" Padding="0" Style="{StaticResource GhostButton}"
+                                                Command="{Binding Path=BindingContext.RemovePriorityCommand, Source={RelativeSource AncestorType={x:Type ContentPage}}}"
+                                                CommandParameter="{Binding .}" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ===== Excluded games ===== -->
+            <Border x:Name="SecExcluded" Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="{loc:Tr Settings_ExcludedGames}" Style="{StaticResource SectionLabel}" />
+                    <Label Text="{loc:Tr Settings_ExcludedGamesDescription}" Style="{StaticResource Muted}" FontSize="12" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <Entry Text="{Binding NewExcludedGame}" Placeholder="{loc:Tr Settings_StartTypingGameName}"
+                               TextColor="{StaticResource DhText}" PlaceholderColor="{StaticResource DhMuted}" />
+                        <Button Grid.Column="1" Text="{loc:Tr Settings_Add}" Style="{StaticResource GhostButton}"
+                                MinimumWidthRequest="80" Command="{Binding AddExcludedCommand}" />
+                    </Grid>
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding ExcludedSuggestions}" Spacing="0">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="tw:GameMatch">
+                                <Button Text="{Binding Name}" HorizontalOptions="Fill"
+                                        BackgroundColor="{StaticResource DhSurface2}" TextColor="{StaticResource DhText}"
+                                        FontSize="14" HeightRequest="38" CornerRadius="6" Margin="0,2"
+                                        Command="{Binding Path=BindingContext.SelectExcludedCommand, Source={RelativeSource AncestorType={x:Type ContentPage}}}"
+                                        CommandParameter="{Binding .}" />
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                    <Label Text="{Binding ExcludedHint}" TextColor="{StaticResource DhGold}" FontSize="12"
+                           IsVisible="{Binding ExcludedHint, Converter={StaticResource StringNotEmpty}}" />
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding ExcludedGames}" Spacing="4">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="sys:String">
+                                <Grid ColumnDefinitions="*,Auto" Padding="4,2">
+                                    <Label Text="{Binding .}" Style="{StaticResource Body}" VerticalOptions="Center" />
+                                    <Button Grid.Column="1" Text="&#x2715;" WidthRequest="40" Style="{StaticResource GhostButton}"
+                                            Command="{Binding Path=BindingContext.RemoveExcludedCommand, Source={RelativeSource AncestorType={x:Type ContentPage}}}"
+                                            CommandParameter="{Binding .}" />
+                                </Grid>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ===== De-dupe games ===== -->
+            <Border x:Name="SecDedupe" Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="{loc:Tr Settings_DedupeGames}" Style="{StaticResource SectionLabel}" />
+                    <Label Text="{loc:Tr Settings_DedupeGamesDescription}"
+                           Style="{StaticResource Muted}" FontSize="12" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <Entry Text="{Binding NewDedupeGame}" Placeholder="{loc:Tr Settings_StartTypingGameName}"
+                               TextColor="{StaticResource DhText}" PlaceholderColor="{StaticResource DhMuted}" />
+                        <Button Grid.Column="1" Text="{loc:Tr Settings_Add}" Style="{StaticResource GhostButton}"
+                                MinimumWidthRequest="80" Command="{Binding AddDedupeCommand}" />
+                    </Grid>
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding DedupeSuggestions}" Spacing="0">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="tw:GameMatch">
+                                <Button Text="{Binding Name}" HorizontalOptions="Fill"
+                                        BackgroundColor="{StaticResource DhSurface2}" TextColor="{StaticResource DhText}"
+                                        FontSize="14" HeightRequest="38" CornerRadius="6" Margin="0,2"
+                                        Command="{Binding Path=BindingContext.SelectDedupeCommand, Source={RelativeSource AncestorType={x:Type ContentPage}}}"
+                                        CommandParameter="{Binding .}" />
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                    <Label Text="{Binding DedupeHint}" TextColor="{StaticResource DhGold}" FontSize="12"
+                           IsVisible="{Binding DedupeHint, Converter={StaticResource StringNotEmpty}}" />
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding DedupeGames}" Spacing="4">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="sys:String">
+                                <Grid ColumnDefinitions="*,Auto" Padding="4,2">
+                                    <Label Text="{Binding .}" Style="{StaticResource Body}" VerticalOptions="Center" />
+                                    <Button Grid.Column="1" Text="&#x2715;" WidthRequest="40" Style="{StaticResource GhostButton}"
+                                            Command="{Binding Path=BindingContext.RemoveDedupeCommand, Source={RelativeSource AncestorType={x:Type ContentPage}}}"
+                                            CommandParameter="{Binding .}" />
+                                </Grid>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ===== Harvest unlinked games ===== -->
+            <Border x:Name="SecUnlinked" Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="{loc:Tr Settings_HarvestUnlinkedGames}" Style="{StaticResource SectionLabel}" />
+                    <Label Text="{loc:Tr Settings_HarvestUnlinkedGamesDescription}"
+                           Style="{StaticResource Muted}" FontSize="12" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <Entry Text="{Binding NewUnlinkedGame}" Placeholder="{loc:Tr Settings_StartTypingGameName}"
+                               TextColor="{StaticResource DhText}" PlaceholderColor="{StaticResource DhMuted}" />
+                        <Button Grid.Column="1" Text="{loc:Tr Settings_Add}" Style="{StaticResource GhostButton}"
+                                MinimumWidthRequest="80" Command="{Binding AddUnlinkedCommand}" />
+                    </Grid>
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding UnlinkedSuggestions}" Spacing="0">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="tw:GameMatch">
+                                <Button Text="{Binding Name}" HorizontalOptions="Fill"
+                                        BackgroundColor="{StaticResource DhSurface2}" TextColor="{StaticResource DhText}"
+                                        FontSize="14" HeightRequest="38" CornerRadius="6" Margin="0,2"
+                                        Command="{Binding Path=BindingContext.SelectUnlinkedCommand, Source={RelativeSource AncestorType={x:Type ContentPage}}}"
+                                        CommandParameter="{Binding .}" />
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                    <Label Text="{Binding UnlinkedHint}" TextColor="{StaticResource DhGold}" FontSize="12"
+                           IsVisible="{Binding UnlinkedHint, Converter={StaticResource StringNotEmpty}}" />
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding HarvestUnlinkedGames}" Spacing="4">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="sys:String">
+                                <Grid ColumnDefinitions="*,Auto" Padding="4,2">
+                                    <Label Text="{Binding .}" Style="{StaticResource Body}" VerticalOptions="Center" />
+                                    <Button Grid.Column="1" Text="&#x2715;" WidthRequest="40" Style="{StaticResource GhostButton}"
+                                            Command="{Binding Path=BindingContext.RemoveUnlinkedCommand, Source={RelativeSource AncestorType={x:Type ContentPage}}}"
+                                            CommandParameter="{Binding .}" />
+                                </Grid>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ===== Preferred channels ===== -->
+            <Border x:Name="SecPreferred" Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="{loc:Tr Settings_PreferredChannels}" Style="{StaticResource SectionLabel}" />
+                    <Label Text="{loc:Tr Settings_PreferredChannelsDescription}"
+                           Style="{StaticResource Muted}" FontSize="12" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <Entry Text="{Binding NewPreferredChannel}" Placeholder="{loc:Tr Settings_PreferredChannelPlaceholder}"
+                               ReturnCommand="{Binding AddPreferredChannelCommand}"
+                               TextColor="{StaticResource DhText}" PlaceholderColor="{StaticResource DhMuted}" />
+                        <Button Grid.Column="1" Text="{loc:Tr Settings_Add}" Style="{StaticResource GhostButton}"
+                                MinimumWidthRequest="80" Command="{Binding AddPreferredChannelCommand}" />
+                    </Grid>
+                    <Label Text="{loc:Tr Settings_NoChannelsYet}" Style="{StaticResource Muted}"
+                           FontSize="12" FontAttributes="Italic" IsVisible="{Binding PreferredChannels.Count, Converter={StaticResource IntIsZero}}" />
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding PreferredChannels}" Spacing="4">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="sys:String">
+                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6" Padding="4,2">
+                                    <Label Text="⭐" FontSize="13" VerticalOptions="Center" />
+                                    <Label Grid.Column="1" Text="{Binding .}" Style="{StaticResource Body}" VerticalOptions="Center" />
+                                    <Button Grid.Column="2" Text="&#x2715;" WidthRequest="40" Style="{StaticResource GhostButton}"
+                                            Command="{Binding Path=BindingContext.RemovePreferredChannelCommand, Source={RelativeSource AncestorType={x:Type ContentPage}}}"
+                                            CommandParameter="{Binding .}" />
+                                </Grid>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ===== Avoided channels ===== -->
+            <Border x:Name="SecAvoided" Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="{loc:Tr Settings_AvoidedChannels}" Style="{StaticResource SectionLabel}" />
+                    <Label Text="{loc:Tr Settings_AvoidedChannelsDescription}"
+                           Style="{StaticResource Muted}" FontSize="12" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <Entry Text="{Binding NewAvoidedChannel}" Placeholder="{loc:Tr Settings_AvoidedChannelPlaceholder}"
+                               ReturnCommand="{Binding AddAvoidedChannelCommand}"
+                               TextColor="{StaticResource DhText}" PlaceholderColor="{StaticResource DhMuted}" />
+                        <Button Grid.Column="1" Text="{loc:Tr Settings_Add}" Style="{StaticResource GhostButton}"
+                                MinimumWidthRequest="80" Command="{Binding AddAvoidedChannelCommand}" />
+                    </Grid>
+                    <Label Text="{loc:Tr Settings_NoChannelsYet}" Style="{StaticResource Muted}"
+                           FontSize="12" FontAttributes="Italic" IsVisible="{Binding AvoidedChannels.Count, Converter={StaticResource IntIsZero}}" />
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding AvoidedChannels}" Spacing="4">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="sys:String">
+                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6" Padding="4,2">
+                                    <Label Text="🚫" FontSize="13" VerticalOptions="Center" />
+                                    <Label Grid.Column="1" Text="{Binding .}" Style="{StaticResource Body}" VerticalOptions="Center" />
+                                    <Button Grid.Column="2" Text="&#x2715;" WidthRequest="40" Style="{StaticResource GhostButton}"
+                                            Command="{Binding Path=BindingContext.RemoveAvoidedChannelCommand, Source={RelativeSource AncestorType={x:Type ContentPage}}}"
+                                            CommandParameter="{Binding .}" />
+                                </Grid>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ===== Drop-claimed sound ===== -->
+            <Border x:Name="SecSound" Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="{loc:Tr Settings_DropClaimedSound}" Style="{StaticResource SectionLabel}" />
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="{loc:Tr Settings_PlaySoundOnDropClaimed}" Style="{StaticResource Body}" VerticalOptions="Center" />
+                        <Switch Grid.Column="1" IsToggled="{Binding PlaySoundOnDropClaimed}" OnColor="{StaticResource DhAccent}" />
+                    </Grid>
+                    <!-- chosen file + choose/test -->
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                        <Label Text="{Binding SoundFileDisplay}" Style="{StaticResource Muted}" FontSize="13"
+                               VerticalOptions="Center" LineBreakMode="MiddleTruncation" />
+                        <Button Grid.Column="1" Text="{loc:Tr Settings_Choose}" Style="{StaticResource GhostButton}"
+                                MinimumWidthRequest="100" Command="{Binding PickSoundFileCommand}" />
+                        <Button Grid.Column="2" Text="{loc:Tr Settings_Test}" Style="{StaticResource GhostButton}"
+                                MinimumWidthRequest="70" Command="{Binding TestSoundCommand}" />
+                    </Grid>
+                    <Button Text="{loc:Tr Settings_ClearSound}" Style="{StaticResource GhostButton}" HorizontalOptions="Start"
+                            MinimumWidthRequest="120" Command="{Binding ClearSoundFileCommand}"
+                            IsVisible="{Binding DropClaimedSoundPath, Converter={StaticResource StringNotEmpty}}" />
+                    <!-- volume -->
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                        <Label Text="{loc:Tr Settings_Volume}" Style="{StaticResource Muted}" FontSize="12" VerticalOptions="Center" />
+                        <Slider Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding SoundVolume}"
+                                MinimumTrackColor="{StaticResource DhAccent}" ThumbColor="{StaticResource DhAccent}"
+                                VerticalOptions="Center" />
+                        <Label Grid.Column="2" Text="{Binding SoundVolumeText}" Style="{StaticResource Muted}"
+                               FontSize="12" WidthRequest="44" HorizontalTextAlignment="End" VerticalOptions="Center" />
+                    </Grid>
+                    <!-- output device -->
+                    <VerticalStackLayout Spacing="4" IsVisible="{Binding AudioSupported}">
+                        <Label Text="{loc:Tr Settings_OutputDevice}"
+                               Style="{StaticResource Muted}" FontSize="12" />
+                        <Picker ItemsSource="{Binding AudioDeviceNames}" SelectedIndex="{Binding AudioDeviceIndex}"
+                                TextColor="{StaticResource DhText}" TitleColor="{StaticResource DhMuted}" />
+                    </VerticalStackLayout>
+                    <Label Text="{Binding SoundStatus}" Style="{StaticResource Muted}" FontSize="12"
+                           IsVisible="{Binding SoundStatus, Converter={StaticResource StringNotEmpty}}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ===== Notifications ===== -->
+            <Border x:Name="SecNotifications" Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="{loc:Tr Settings_DesktopNotifications}" Style="{StaticResource SectionLabel}" />
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="{loc:Tr Settings_DropClaimed}" Style="{StaticResource Body}" VerticalOptions="Center" />
+                        <Switch Grid.Column="1" IsToggled="{Binding NotifyOnDropClaimed}" OnColor="{StaticResource DhAccent}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="{loc:Tr Settings_CampaignComplete}" Style="{StaticResource Body}" VerticalOptions="Center" />
+                        <Switch Grid.Column="1" IsToggled="{Binding NotifyOnCampaignComplete}" OnColor="{StaticResource DhAccent}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="{loc:Tr Settings_AllDropsHarvested}" Style="{StaticResource Body}" VerticalOptions="Center" />
+                        <Switch Grid.Column="1" IsToggled="{Binding NotifyOnAllHarvested}" OnColor="{StaticResource DhAccent}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="{loc:Tr Settings_LoginExpired}" Style="{StaticResource Body}" VerticalOptions="Center" />
+                        <Switch Grid.Column="1" IsToggled="{Binding NotifyOnLoginExpired}" OnColor="{StaticResource DhAccent}" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ===== Webhook ===== -->
+            <Border x:Name="SecWebhook" Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="{loc:Tr Settings_RemoteWebhookAlerts}" Style="{StaticResource SectionLabel}" />
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="{loc:Tr Settings_EnableWebhookAlerts}" Style="{StaticResource Body}" VerticalOptions="Center" />
+                        <Switch Grid.Column="1" IsToggled="{Binding WebhookEnabled}" OnColor="{StaticResource DhAccent}" />
+                    </Grid>
+                    <Picker Title="{loc:Tr Settings_WebhookType}" ItemsSource="{Binding WebhookKinds}"
+                            SelectedIndex="{Binding WebhookKindIndex}"
+                            TextColor="{StaticResource DhText}" TitleColor="{StaticResource DhMuted}" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <Entry Text="{Binding WebhookUrl}" Placeholder="{loc:Tr Settings_WebhookUrl}"
+                               IsPassword="{Binding WebhookUrlMasked}"
+                               TextColor="{StaticResource DhText}" PlaceholderColor="{StaticResource DhMuted}" />
+                        <Button Grid.Column="1" Text="{Binding WebhookUrlToggleText}" Style="{StaticResource GhostButton}"
+                                MinimumWidthRequest="80" Command="{Binding ToggleWebhookUrlCommand}" />
+                    </Grid>
+                    <Button Text="{loc:Tr Settings_SendTestMessage}" Style="{StaticResource GhostButton}"
+                            Command="{Binding TestWebhookCommand}" />
+                    <Label Text="{Binding WebhookTestResult}" Style="{StaticResource Muted}"
+                           IsVisible="{Binding WebhookTestResult, Converter={StaticResource StringNotEmpty}}" />
+
+                    <Label Text="{loc:Tr Settings_SendOn}" Style="{StaticResource SectionLabel}" Margin="0,6,0,0" />
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="{loc:Tr Settings_NewDropAvailable}" Style="{StaticResource Body}" VerticalOptions="Center" />
+                        <Switch Grid.Column="1" IsToggled="{Binding WebhookOnNewDrop}" OnColor="{StaticResource DhAccent}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="{loc:Tr Settings_DropClaimed}" Style="{StaticResource Body}" VerticalOptions="Center" />
+                        <Switch Grid.Column="1" IsToggled="{Binding WebhookOnDropClaimed}" OnColor="{StaticResource DhAccent}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="{loc:Tr Settings_CampaignComplete}" Style="{StaticResource Body}" VerticalOptions="Center" />
+                        <Switch Grid.Column="1" IsToggled="{Binding WebhookOnCampaignComplete}" OnColor="{StaticResource DhAccent}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="{loc:Tr Settings_AllDropsHarvested}" Style="{StaticResource Body}" VerticalOptions="Center" />
+                        <Switch Grid.Column="1" IsToggled="{Binding WebhookOnAllHarvested}" OnColor="{StaticResource DhAccent}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="{loc:Tr Settings_LoginExpired}" Style="{StaticResource Body}" VerticalOptions="Center" />
+                        <Switch Grid.Column="1" IsToggled="{Binding WebhookOnLoginExpired}" OnColor="{StaticResource DhAccent}" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ===== Log ===== -->
+            <Border x:Name="SecLog" Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="{loc:Tr Settings_Log}" Style="{StaticResource SectionLabel}" />
+                    <Label Text="{loc:Tr Settings_TimestampOnEachLine}" Style="{StaticResource Muted}" />
+                    <Picker ItemsSource="{Binding LogTimestampModes}" SelectedIndex="{Binding LogTimestampModeIndex}"
+                            TextColor="{StaticResource DhText}" TitleColor="{StaticResource DhMuted}" />
+                    <Picker ItemsSource="{Binding LogClocks}" SelectedIndex="{Binding LogClockIndex}"
+                            TextColor="{StaticResource DhText}" TitleColor="{StaticResource DhMuted}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ===== App ===== -->
+            <Border x:Name="SecApp" Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="{loc:Tr Settings_Application}" Style="{StaticResource SectionLabel}" />
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="{loc:Tr Settings_MinimizeToTray}" Style="{StaticResource Body}" VerticalOptions="Center" />
+                        <Switch Grid.Column="1" IsToggled="{Binding MinimizeToTray}" OnColor="{StaticResource DhAccent}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="{loc:Tr Settings_StartWithSystem}" Style="{StaticResource Body}" VerticalOptions="Center" />
+                        <Switch Grid.Column="1" IsToggled="{Binding Autostart}" OnColor="{StaticResource DhAccent}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <VerticalStackLayout>
+                            <Label Text="{loc:Tr Settings_StartMinimizedToTray}" Style="{StaticResource Body}" />
+                            <Label Text="{loc:Tr Settings_StartMinimizedToTrayDescription}" Style="{StaticResource Muted}" FontSize="12" />
+                        </VerticalStackLayout>
+                        <Switch Grid.Column="1" IsToggled="{Binding AutostartIntoTray}" OnColor="{StaticResource DhAccent}" />
+                    </Grid>
+                    <Label Text="{loc:Tr Settings_ProxyOptional}" Style="{StaticResource Muted}" />
+                    <Entry Text="{Binding Proxy}" Placeholder="{loc:Tr Settings_ProxyPlaceholder}"
+                           TextColor="{StaticResource DhText}" PlaceholderColor="{StaticResource DhMuted}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ===== Debug server ===== -->
+            <Border x:Name="SecDebug" Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="{loc:Tr Settings_DebugServer}" Style="{StaticResource SectionLabel}" />
+                    <Grid ColumnDefinitions="*,Auto">
+                        <VerticalStackLayout>
+                            <Label Text="{loc:Tr Settings_RunLocalDebugServer}" Style="{StaticResource Body}" />
+                            <Label Text="{loc:Tr Settings_RunLocalDebugServerDescription}" Style="{StaticResource Muted}" FontSize="12" />
+                        </VerticalStackLayout>
+                        <Switch Grid.Column="1" IsToggled="{Binding DebugServerEnabled}" OnColor="{StaticResource DhAccent}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="Auto,90" ColumnSpacing="8" IsVisible="{Binding DebugServerEnabled}">
+                        <Label Text="{loc:Tr Settings_Port}" Style="{StaticResource Muted}" VerticalOptions="Center" />
+                        <Entry Grid.Column="1" Text="{Binding DebugServerPortText}" Keyboard="Numeric"
+                               HorizontalTextAlignment="Center"
+                               TextColor="{StaticResource DhText}" PlaceholderColor="{StaticResource DhMuted}" />
+                    </Grid>
+                    <Label Text="{Binding DebugServerStatus}" Style="{StaticResource Muted}" FontSize="12"
+                           IsVisible="{Binding DebugServerEnabled}" />
+                </VerticalStackLayout>
+            </Border>
+
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+</ContentPage>

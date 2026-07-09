@@ -1,0 +1,62 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio / Rider / VS Code
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userprefs
+*.sln.docstates
+
+# .NET
+project.lock.json
+project.fragment.lock.json
+artifacts/
+*.nupkg
+*.snupkg
+
+# MAUI / mobile
+*.binlog
+*.aab
+*.apk
+*.ipa
+*.app/
+*.appx
+*.msix
+Platforms/Android/keystore/
+*.keystore
+
+# Publish output
+publish/
+[Pp]ublish[Pp]rofiles/
+
+# Built installer artifacts (keep the build scripts, not the outputs)
+installer/*.exe
+installer/*.pkg
+installer/*.zip
+installer/[Oo]utput/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local/secret files (should never be here, but just in case)
+auth.json
+settings.json
+stats.json
+*.secret
+*.pfx
+
+# Update endpoint - deployment URL kept out of the public repo
+Services/UpdateEndpoint.Private.cs
+installer/manifest.json
+
+# Installer / release builder tooling - not part of the public app source
+installer/

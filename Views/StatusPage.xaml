@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:DropHarvester.ViewModels"
+             xmlns:ev="clr-namespace:DropHarvester.Models.Events"
+             xmlns:m="clr-namespace:DropHarvester.Models.Twitch"
+             xmlns:loc="clr-namespace:DropHarvester.Localization"
+             x:Class="DropHarvester.Views.StatusPage"
+             x:Name="Root"
+             x:DataType="vm:StatusViewModel"
+             Title="Status"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="{StaticResource DhBg}">
+    <ScrollView>
+        <VerticalStackLayout Padding="24" Spacing="18">
+
+            <!-- ===== Update banner (shows only when a newer version has already been downloaded and is
+                 ready to install; otherwise updates pull silently and auto-install on next restart) ===== -->
+            <Border Style="{StaticResource Card}" Padding="14,10" IsVisible="{Binding UpdateReady}">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                    <Label Text="&#x2191;" TextColor="{StaticResource DhGold}" FontSize="20" FontAttributes="Bold"
+                           VerticalOptions="Center" />
+                    <VerticalStackLayout Grid.Column="1" Spacing="0" VerticalOptions="Center">
+                        <Label Text="{loc:Tr Status_UpdateReady}" Style="{StaticResource Body}" FontAttributes="Bold" />
+                        <Label Text="{Binding UpdateStatus}" Style="{StaticResource Muted}" FontSize="12" />
+                    </VerticalStackLayout>
+                    <Button Grid.Column="2" Text="{loc:Tr Status_UpdateNow}" Style="{StaticResource PrimaryButton}"
+                            MinimumWidthRequest="150" Command="{Binding UpdateNowCommand}" />
+                </Grid>
+            </Border>
+
+            <!-- ===== Account card ===== -->
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="14">
+                    <Label Text="{loc:Tr Status_Account}" Style="{StaticResource SectionLabel}" />
+                    <Label Text="{Binding AccountLine}" Style="{StaticResource Body}" FontSize="16" />
+
+                    <!-- Logged out: offer login -->
+                    <Button Text="{loc:Tr Status_LogIn}"
+                            Style="{StaticResource PrimaryButton}"
+                            Command="{Binding LogInCommand}"
+                            IsVisible="{Binding IsLoggedIn, Converter={StaticResource InvertBool}}">
+                        <Button.Triggers>
+                            <DataTrigger TargetType="Button" Binding="{Binding LoginInProgress}" Value="True">
+                                <Setter Property="IsVisible" Value="False" />
+                            </DataTrigger>
+                        </Button.Triggers>
+                    </Button>
+
+                    <!-- Logged in: offer logout. Compact + left-aligned so it's not a full-width target
+                         that's easy to hit by accident. -->
+                    <Button Text="{loc:Tr Status_LogOut}"
+                            Style="{StaticResource GhostButton}"
+                            MinimumWidthRequest="120"
+                            HorizontalOptions="Start"
+                            Command="{Binding LogOutCommand}"
+                            IsVisible="{Binding IsLoggedIn}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ===== Device-code prompt ===== -->
+            <Border Style="{StaticResource Card}" IsVisible="{Binding ShowDeviceCode}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="{loc:Tr Status_AuthorizeHeader}" Style="{StaticResource SectionLabel}" />
+                    <Label Style="{StaticResource Muted}"
+                           Text="{loc:Tr Status_AuthorizeBody}" />
+                    <Label Text="{Binding DeviceCode}"
+                           TextColor="{StaticResource DhAccent}"
+                           FontSize="40" FontAttributes="Bold"
+                           CharacterSpacing="6"
+                           HorizontalTextAlignment="Center" />
+                    <Label Text="{Binding VerificationUri}"
+                           Style="{StaticResource Muted}"
+                           HorizontalTextAlignment="Center" />
+                    <Button Text="{loc:Tr Common_Cancel}" Style="{StaticResource GhostButton}"
+                            Command="{Binding CancelLoginCommand}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ===== Hint / status line ===== -->
+            <Label Text="{Binding LoginHint}"
+                   Style="{StaticResource Muted}"
+                   IsVisible="{Binding LoginHint, Converter={StaticResource StringNotEmpty}}" />
+
+            <ActivityIndicator IsRunning="{Binding LoginInProgress}"
+                               IsVisible="{Binding LoginInProgress}"
+                               Color="{StaticResource DhAccent}"
+                               HorizontalOptions="Start" />
+
+            <!-- ===== Connection-issue banner: Twitch Drops down / connection lost (auto-resumes) ===== -->
+            <Border IsVisible="{Binding ConnectionIssueVisible}"
+                    BackgroundColor="#3A2E11" Stroke="#E5A23D" StrokeThickness="1"
+                    StrokeShape="RoundRectangle 8" Padding="14,10">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                    <Label Text="&#x26A0;" TextColor="#F5C46B" FontSize="18" VerticalOptions="Center" />
+                    <Label Grid.Column="1" Text="{Binding ConnectionIssueText}" TextColor="#F0D9A8"
+                           VerticalOptions="Center" />
+                </Grid>
+            </Border>
+
+            <!-- ===== Harvesting status ===== -->
+            <Border Style="{StaticResource Card}" IsVisible="{Binding IsLoggedIn}">
+                <VerticalStackLayout Spacing="12">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="{loc:Tr Status_Harvesting}" Style="{StaticResource SectionLabel}" VerticalOptions="Center" />
+                        <Button Grid.Column="1"
+                                Text="{Binding StartPauseText}"
+                                Style="{StaticResource GhostButton}"
+                                WidthRequest="160"
+                                Command="{Binding ToggleHarvestingCommand}" />
+                    </Grid>
+
+                    <Label Text="{Binding HarvestingSummary}" Style="{StaticResource Body}" FontSize="16" />
+
+                    <Grid ColumnDefinitions="90,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="4">
+                        <Label Text="{loc:Tr Status_Channel}" Style="{StaticResource Muted}" />
+                        <Label Grid.Column="1" Text="{Binding ActiveChannelName}" Style="{StaticResource Body}" />
+                        <Label Grid.Row="1" Text="{loc:Tr Status_Game}" Style="{StaticResource Muted}" />
+                        <Label Grid.Row="1" Grid.Column="1" Text="{Binding ActiveGameName}" Style="{StaticResource Body}" />
+                        <Label Grid.Row="2" Text="{loc:Tr Status_Campaign}" Style="{StaticResource Muted}" />
+                        <Label Grid.Row="2" Grid.Column="1" Text="{Binding ActiveCampaignName}" Style="{StaticResource Body}" />
+                    </Grid>
+
+                    <!-- Campaign progress + time remaining -->
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="{loc:Tr Status_CampaignProgress}" Style="{StaticResource Muted}" />
+                        <Label Grid.Column="1" Text="{Binding CampaignProgressText}" Style="{StaticResource Muted}" />
+                    </Grid>
+                    <ProgressBar Progress="{Binding CampaignProgress}" ProgressColor="{StaticResource DhGold}" />
+                    <Label Text="{Binding CampaignRemainingText}" Style="{StaticResource Muted}" FontSize="12"
+                           HorizontalOptions="End"
+                           IsVisible="{Binding CampaignRemainingText, Converter={StaticResource StringNotEmpty}}" />
+
+                    <!-- Active drop + reward icon -->
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10" Margin="0,6,0,0">
+                        <Border WidthRequest="48" HeightRequest="48" Padding="0" VerticalOptions="Center"
+                                BackgroundColor="{StaticResource DhSurface2}" Stroke="{StaticResource DhBorder}"
+                                StrokeThickness="1" StrokeShape="RoundRectangle 8"
+                                IsVisible="{Binding ActiveDropImageUrl, Converter={StaticResource StringNotEmpty}}">
+                            <Image Source="{Binding ActiveDropImageUrl}" Aspect="AspectFit" />
+                        </Border>
+                        <VerticalStackLayout Grid.Column="1" Spacing="4">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <Label Text="{Binding ActiveDropName}" Style="{StaticResource Body}" LineBreakMode="TailTruncation" />
+                                <Label Grid.Column="1" Text="{Binding ActiveDropProgressText}" Style="{StaticResource Muted}" />
+                            </Grid>
+                            <ProgressBar Progress="{Binding ActiveDropProgress}" ProgressColor="{StaticResource DhAccent}" />
+                            <Label Text="{Binding ActiveDropRemainingText}" Style="{StaticResource Muted}" FontSize="12"
+                                   HorizontalOptions="End"
+                                   IsVisible="{Binding ActiveDropRemainingText, Converter={StaticResource StringNotEmpty}}" />
+                        </VerticalStackLayout>
+                    </Grid>
+
+                    <Label Text="{Binding WebsocketStatus, StringFormat='Websocket: {0}'}"
+                           Style="{StaticResource Muted}" Margin="0,6,0,0" />
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ===== Up next: the game + all its drops in order, with a Harvest button that overrides
+                 selection so it takes over the Harvesting slot ===== -->
+            <Border Style="{StaticResource Card}" IsVisible="{Binding NextUpVisible}">
+                <VerticalStackLayout Spacing="10">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                        <Label Text="{loc:Tr Status_UpNext}" Style="{StaticResource SectionLabel}" VerticalOptions="Center" />
+                        <Label Grid.Column="1" Text="{Binding NextUpGameName}" Style="{StaticResource Body}"
+                               FontAttributes="Bold" FontSize="16" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                        <Button Grid.Column="2" Text="{loc:Tr Common_Harvest}" Style="{StaticResource PrimaryButton}" MinimumWidthRequest="100"
+                                Command="{Binding HarvestCampaignCommand}" CommandParameter="{Binding NextUpCampaignId}" />
+                    </Grid>
+
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding NextUpDrops}" Spacing="6">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="m:TimedDrop">
+                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                                    <Border WidthRequest="34" HeightRequest="34" Padding="0" VerticalOptions="Center"
+                                            BackgroundColor="{StaticResource DhSurface2}" Stroke="{StaticResource DhBorder}"
+                                            StrokeThickness="1" StrokeShape="RoundRectangle 6">
+                                        <Image Source="{Binding RewardImageUrl}" Aspect="AspectFit" />
+                                    </Border>
+                                    <Label Grid.Column="1" Text="{Binding RewardName}" Style="{StaticResource Body}" FontSize="13"
+                                           VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                                    <Label Grid.Column="2" Text="{Binding ProgressText}" Style="{StaticResource Muted}"
+                                           FontSize="12" VerticalOptions="Center" />
+                                </Grid>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- ===== Harvesting queue: click a campaign to override selection; remove to resume automation ===== -->
+            <Border Style="{StaticResource Card}" IsVisible="{Binding QueueVisible}">
+                <VerticalStackLayout Spacing="10">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="{loc:Tr Status_Queue}" Style="{StaticResource SectionLabel}" VerticalOptions="Center" />
+                        <Button Grid.Column="1" Text="{loc:Tr Status_RemoveOverride}" Style="{StaticResource GhostButton}"
+                                MinimumWidthRequest="150" Command="{Binding RemoveOverrideCommand}"
+                                IsVisible="{Binding OverrideActive}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                        <Label Text="{loc:Tr Status_AllowNewHigherPriority}"
+                               Style="{StaticResource Muted}" FontSize="12" VerticalOptions="Center" />
+                        <Switch Grid.Column="1" IsToggled="{Binding OverrideYieldsToPriority}" OnColor="{StaticResource DhAccent}" />
+                    </Grid>
+                    <CollectionView ItemsSource="{Binding Queue}">
+                        <CollectionView.ItemsLayout>
+                            <LinearItemsLayout Orientation="Vertical" ItemSpacing="6" />
+                        </CollectionView.ItemsLayout>
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="ev:HarvestingQueueItem">
+                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                                    <Border WidthRequest="36" HeightRequest="36" Padding="0" VerticalOptions="Center"
+                                            BackgroundColor="{StaticResource DhSurface2}" Stroke="{StaticResource DhBorder}"
+                                            StrokeThickness="1" StrokeShape="RoundRectangle 6"
+                                            IsVisible="{Binding DropImageUrl, Converter={StaticResource StringNotEmpty}}">
+                                        <Image Source="{Binding DropImageUrl}" Aspect="AspectFit" />
+                                    </Border>
+                                    <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                                        <Label Text="{Binding Game}" Style="{StaticResource Body}" FontSize="14" LineBreakMode="TailTruncation" />
+                                        <Label Text="{Binding DropName}" Style="{StaticResource Muted}" FontSize="11" LineBreakMode="TailTruncation" />
+                                    </VerticalStackLayout>
+                                    <Label Grid.Column="2" Text="{loc:Tr Common_Harvesting}" TextColor="{StaticResource DhAccent}" FontAttributes="Bold"
+                                           FontSize="12" VerticalOptions="Center" IsVisible="{Binding IsActive}" />
+                                    <Button Grid.Column="2" Text="{loc:Tr Common_Harvest}" Style="{StaticResource GhostButton}"
+                                            MinimumWidthRequest="80" HeightRequest="34"
+                                            Command="{Binding Source={x:Reference Root}, Path=BindingContext.HarvestCampaignCommand}"
+                                            CommandParameter="{Binding CampaignId}"
+                                            IsVisible="{Binding IsActive, Converter={StaticResource InvertBool}}" />
+                                </Grid>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </VerticalStackLayout>
+            </Border>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

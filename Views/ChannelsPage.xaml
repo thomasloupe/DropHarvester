@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:DropHarvester.ViewModels"
+             xmlns:m="clr-namespace:DropHarvester.Models.Twitch"
+             xmlns:loc="clr-namespace:DropHarvester.Localization"
+             x:Class="DropHarvester.Views.ChannelsPage"
+             x:Name="ChannelsRoot"
+             x:DataType="vm:ChannelsViewModel"
+             Title="Channels"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="{StaticResource DhBg}">
+    <Grid RowDefinitions="Auto,*" Padding="16" RowSpacing="8">
+
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="10">
+            <Label Padding="4,0,0,0" Style="{StaticResource Muted}" FontSize="12" VerticalOptions="Center"
+                   Text="{Binding CountText}" />
+            <HorizontalStackLayout Grid.Column="1" Spacing="6" VerticalOptions="Center" IsVisible="{Binding IsRefreshing}">
+                <ActivityIndicator IsRunning="{Binding IsRefreshing}" Color="{StaticResource DhAccent}"
+                                   WidthRequest="16" HeightRequest="16" />
+                <Label Text="{loc:Tr Channels_Updating}" Style="{StaticResource Muted}" FontSize="12" VerticalOptions="Center" />
+            </HorizontalStackLayout>
+        </Grid>
+
+        <CollectionView Grid.Row="1" ItemsSource="{Binding Groups}">
+            <CollectionView.ItemsLayout>
+                <LinearItemsLayout Orientation="Vertical" ItemSpacing="8" />
+            </CollectionView.ItemsLayout>
+            <CollectionView.EmptyView>
+                <Label Text="{loc:Tr Channels_EmptyView}"
+                       Style="{StaticResource Muted}" Padding="8" VerticalOptions="Start" />
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="vm:ChannelGroup">
+                    <VerticalStackLayout Spacing="0" Margin="0,0,0,4">
+
+                        <!-- Game header - tap anywhere on it to expand/collapse -->
+                        <Grid ColumnDefinitions="Auto,*,Auto" Padding="8,10" ColumnSpacing="8"
+                              BackgroundColor="{StaticResource DhSurface2}">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer
+                                    Command="{Binding Path=BindingContext.ToggleGroupCommand, Source={RelativeSource AncestorType={x:Type ContentPage}}}"
+                                    CommandParameter="{Binding .}" />
+                            </Grid.GestureRecognizers>
+                            <Label Text="{Binding Caret}" TextColor="{StaticResource DhAccent}" FontSize="14"
+                                   VerticalOptions="Center" WidthRequest="16" HorizontalTextAlignment="Center" />
+                            <Label Grid.Column="1" Text="{Binding GameName}" Style="{StaticResource Body}"
+                                   FontAttributes="Bold" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                            <Label Grid.Column="2" Text="{Binding Summary}" Style="{StaticResource Muted}"
+                                   FontSize="12" VerticalOptions="Center" />
+                        </Grid>
+
+                        <!-- Expanded content: column headers + channels (only shown when expanded, so
+                             the headers make sense right above the rows they label) -->
+                        <VerticalStackLayout IsVisible="{Binding IsExpanded}" Spacing="0">
+
+                        <!-- Column headers (aligned with the channel rows below) -->
+                        <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" Padding="28,6,8,4" ColumnSpacing="10">
+                            <Label Text="{loc:Tr Channels_Channel}" Style="{StaticResource SectionLabel}" VerticalOptions="Center" />
+                            <Label Grid.Column="1" Text="{loc:Tr Channels_Official}" Style="{StaticResource SectionLabel}" WidthRequest="72"
+                                   HorizontalTextAlignment="Center" VerticalOptions="Center" />
+                            <Label Grid.Column="2" Text="{loc:Tr Channels_Viewers}" Style="{StaticResource SectionLabel}" WidthRequest="64"
+                                   HorizontalTextAlignment="End" VerticalOptions="Center" />
+                            <Label Grid.Column="3" Text="{loc:Tr Channels_Status}" Style="{StaticResource SectionLabel}" WidthRequest="92" VerticalOptions="Center" />
+                            <Label Grid.Column="4" Text="" WidthRequest="80" />
+                        </Grid>
+
+                        <VerticalStackLayout Spacing="0"
+                                             BindableLayout.ItemsSource="{Binding Channels}">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="m:TwitchChannel">
+                                    <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" Padding="28,6,8,6" ColumnSpacing="10">
+                                        <Grid.Triggers>
+                                            <DataTrigger TargetType="Grid" Binding="{Binding IsActive}" Value="True">
+                                                <Setter Property="BackgroundColor" Value="{StaticResource DhSurface}" />
+                                            </DataTrigger>
+                                        </Grid.Triggers>
+                                        <!-- Right-click (or control-click on macOS) to prefer/avoid this channel -->
+                                        <FlyoutBase.ContextFlyout>
+                                            <MenuFlyout>
+                                                <MenuFlyoutItem Text="{Binding PreferMenuText}"
+                                                                Command="{Binding Source={x:Reference ChannelsRoot}, Path=BindingContext.PreferChannelCommand}"
+                                                                CommandParameter="{Binding .}" />
+                                                <MenuFlyoutItem Text="{Binding AvoidMenuText}"
+                                                                Command="{Binding Source={x:Reference ChannelsRoot}, Path=BindingContext.AvoidChannelCommand}"
+                                                                CommandParameter="{Binding .}" />
+                                            </MenuFlyout>
+                                        </FlyoutBase.ContextFlyout>
+                                        <HorizontalStackLayout Spacing="6" VerticalOptions="Center">
+                                            <Label Text="{Binding PrefAvoidGlyph}" FontSize="13" VerticalOptions="Center"
+                                                   IsVisible="{Binding HasPrefAvoid}" />
+                                            <Label Text="{Binding DisplayName}" Style="{StaticResource Body}" FontSize="13"
+                                                   LineBreakMode="TailTruncation" VerticalOptions="Center" />
+                                        </HorizontalStackLayout>
+                                        <!-- Official Campaign Channel column: green check when on a campaign's allow-list -->
+                                        <Label Grid.Column="1" Text="✓" TextColor="{StaticResource DhGreen}" FontSize="16"
+                                               FontAttributes="Bold" VerticalOptions="Center" WidthRequest="72"
+                                               HorizontalTextAlignment="Center" IsVisible="{Binding IsOfficial}" />
+                                        <Label Grid.Column="2" Text="{Binding ViewerCount, StringFormat='{0:N0}'}"
+                                               Style="{StaticResource Muted}" FontSize="12" VerticalOptions="Center"
+                                               WidthRequest="64" HorizontalTextAlignment="End" />
+                                        <Label Grid.Column="3" Text="{Binding StatusText}" FontSize="12" VerticalOptions="Center"
+                                               WidthRequest="92"
+                                               TextColor="{Binding Online, Converter={StaticResource BoolToColor}, ConverterParameter='DhGreen|DhMuted'}" />
+                                        <Button Grid.Column="4" Text="{loc:Tr Channels_Watch}" MinimumWidthRequest="80" HeightRequest="32" FontSize="12"
+                                                BackgroundColor="{StaticResource DhSurface2}" TextColor="{StaticResource DhText}"
+                                                CornerRadius="8" IsVisible="{Binding CanWatch}"
+                                                Command="{Binding Path=BindingContext.SwitchToCommand, Source={RelativeSource AncestorType={x:Type ContentPage}}}"
+                                                CommandParameter="{Binding .}" />
+                                        <Label Grid.Column="4" Text="{loc:Tr Channels_Switching}" MinimumWidthRequest="80" FontSize="12"
+                                               VerticalOptions="Center" HorizontalTextAlignment="Center"
+                                               TextColor="{StaticResource DhAccent}" IsVisible="{Binding PendingSwitch}" />
+                                        <!-- Actively-watched channel: a "Harvesting" badge + spinner fills the
+                                             Watch button's slot (keeps columns aligned) and shows it's live. -->
+                                        <HorizontalStackLayout Grid.Column="4" WidthRequest="80" Spacing="5"
+                                                               VerticalOptions="Center" HorizontalOptions="Center"
+                                                               IsVisible="{Binding IsActive}">
+                                            <ActivityIndicator IsRunning="{Binding IsActive}" Color="{StaticResource DhAccent}"
+                                                               WidthRequest="13" HeightRequest="13" VerticalOptions="Center" />
+                                            <Label Text="{loc:Tr Channels_Harvesting}" TextColor="{StaticResource DhAccent}" FontSize="12"
+                                                   FontAttributes="Bold" VerticalOptions="Center" />
+                                        </HorizontalStackLayout>
+                                    </Grid>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
+                        </VerticalStackLayout>
+                    </VerticalStackLayout>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</ContentPage>

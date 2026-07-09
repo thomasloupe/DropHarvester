@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:DropHarvester.ViewModels"
+             xmlns:m="clr-namespace:DropHarvester.Models"
+             xmlns:loc="clr-namespace:DropHarvester.Localization"
+             x:Class="DropHarvester.Views.StatsPage"
+             x:DataType="vm:StatsViewModel"
+             Title="Stats"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="{StaticResource DhBg}">
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="16">
+
+            <Label Text="{Binding SinceText}" Style="{StaticResource Muted}" />
+
+            <!-- Totals -->
+            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="12">
+                <Border Style="{StaticResource Card}">
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="{Binding TotalDropsClaimed}" Style="{StaticResource H1}" TextColor="{StaticResource DhAccent}" />
+                        <Label Text="{loc:Tr Stats_DropsClaimed}" Style="{StaticResource Muted}" />
+                    </VerticalStackLayout>
+                </Border>
+                <Border Grid.Column="1" Style="{StaticResource Card}">
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="{Binding TotalCampaignsCompleted}" Style="{StaticResource H1}" TextColor="{StaticResource DhGreen}" />
+                        <Label Text="{loc:Tr Stats_CampaignsDone}" Style="{StaticResource Muted}" />
+                    </VerticalStackLayout>
+                </Border>
+                <Border Grid.Column="2" Style="{StaticResource Card}">
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="{Binding TotalWatchTime}" Style="{StaticResource H1}" TextColor="{StaticResource DhGold}" />
+                        <Label Text="{loc:Tr Stats_WatchTimeSaved}" Style="{StaticResource Muted}" />
+                    </VerticalStackLayout>
+                </Border>
+            </Grid>
+
+            <!-- Chart -->
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="{loc:Tr Stats_DropsClaimedLast7Days}" Style="{StaticResource SectionLabel}" />
+                    <GraphicsView x:Name="Chart" HeightRequest="160">
+                        <GraphicsView.GestureRecognizers>
+                            <PointerGestureRecognizer PointerMoved="OnChartPointerMoved" PointerExited="OnChartPointerExited" />
+                        </GraphicsView.GestureRecognizers>
+                    </GraphicsView>
+                    <Label x:Name="ChartTooltip" Style="{StaticResource Body}" FontSize="12" IsVisible="False" />
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Export -->
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                <Button Text="{loc:Tr Stats_ExportCsv}" Style="{StaticResource GhostButton}" Command="{Binding ExportCsvCommand}" />
+                <Button Grid.Column="1" Text="{loc:Tr Stats_ExportJson}" Style="{StaticResource GhostButton}" Command="{Binding ExportJsonCommand}" />
+            </Grid>
+            <Label Text="{Binding ExportResult}" Style="{StaticResource Muted}"
+                   IsVisible="{Binding ExportResult, Converter={StaticResource StringNotEmpty}}" />
+
+            <!-- History -->
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="{loc:Tr Stats_RecentHistory}" Style="{StaticResource SectionLabel}" />
+                    <CollectionView ItemsSource="{Binding History}" HeightRequest="260">
+                        <CollectionView.EmptyView>
+                            <Label Text="{loc:Tr Stats_NoHistoryYet}" Style="{StaticResource Muted}" Padding="4" />
+                        </CollectionView.EmptyView>
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="m:StatEntry">
+                                <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="10" Padding="2,3">
+                                    <Label Text="{Binding LocalTimeText}" Style="{StaticResource Muted}" VerticalOptions="Center" />
+                                    <Label Grid.Column="1" Text="{Binding KindLabel}" Style="{StaticResource Muted}" FontAttributes="Bold" VerticalOptions="Center">
+                                        <Label.Triggers>
+                                            <DataTrigger TargetType="Label" Binding="{Binding Kind}" Value="CampaignComplete">
+                                                <Setter Property="TextColor" Value="{StaticResource DhGreen}" />
+                                            </DataTrigger>
+                                            <DataTrigger TargetType="Label" Binding="{Binding Kind}" Value="DropClaimed">
+                                                <Setter Property="TextColor" Value="{StaticResource DhAccent}" />
+                                            </DataTrigger>
+                                        </Label.Triggers>
+                                    </Label>
+                                    <Label Grid.Column="2" Text="{Binding Name}" Style="{StaticResource Body}" LineBreakMode="TailTruncation" VerticalOptions="Center" />
+                                    <Label Grid.Column="3" Text="{Binding Game}" Style="{StaticResource Muted}" VerticalOptions="Center" />
+                                </Grid>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </VerticalStackLayout>
+            </Border>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

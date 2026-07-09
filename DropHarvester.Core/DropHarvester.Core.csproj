@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The MAUI-free harvesting engine: HTTP + websockets + JSON + domain models. Shared by the desktop
+       MAUI app (DropHarvester) and the headless Docker service (DropHarvester.Daemon). Targets plain
+       net10.0 so it runs anywhere .NET does, including a Linux container. Keep this project free of
+       any MAUI / platform dependency. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>DropHarvester</RootNamespace>
+    <AssemblyName>DropHarvester.Core</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- Field-based [ObservableProperty] (same as the app); silence the partial-property hint. -->
+    <NoWarn>$(NoWarn);MVVMTK0045</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
+  </ItemGroup>
+
+</Project>

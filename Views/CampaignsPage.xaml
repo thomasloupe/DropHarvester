@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:DropHarvester.ViewModels"
+             xmlns:m="clr-namespace:DropHarvester.Models.Twitch"
+             xmlns:loc="clr-namespace:DropHarvester.Localization"
+             x:Class="DropHarvester.Views.CampaignsPage"
+             x:Name="Root"
+             x:DataType="vm:CampaignsViewModel"
+             Title="Inventory"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="{StaticResource DhBg}">
+    <Grid RowDefinitions="Auto,Auto,Auto,*" Padding="16" RowSpacing="10">
+
+        <HorizontalStackLayout HorizontalOptions="End" Spacing="8">
+            <Button Text="{Binding ViewToggleText}" Style="{StaticResource GhostButton}"
+                    MinimumWidthRequest="120" Command="{Binding ToggleViewCommand}" />
+            <Button Text="{loc:Tr Campaigns_Refresh}" Style="{StaticResource GhostButton}"
+                    MinimumWidthRequest="120" Command="{Binding RefreshCommand}" />
+        </HorizontalStackLayout>
+
+        <!-- Filters -->
+        <FlexLayout Grid.Row="1" Wrap="Wrap" JustifyContent="Start" AlignItems="Center">
+            <HorizontalStackLayout Spacing="4" Margin="0,0,16,4">
+                <CheckBox IsChecked="{Binding ShowUpcoming}" Color="{StaticResource DhAccent}" />
+                <Label Text="{loc:Tr Campaigns_Upcoming}" Style="{StaticResource Body}" VerticalOptions="Center" />
+            </HorizontalStackLayout>
+            <HorizontalStackLayout Spacing="4" Margin="0,0,16,4">
+                <CheckBox IsChecked="{Binding ShowExpired}" Color="{StaticResource DhAccent}" />
+                <Label Text="{loc:Tr Campaigns_Expired}" Style="{StaticResource Body}" VerticalOptions="Center" />
+            </HorizontalStackLayout>
+            <HorizontalStackLayout Spacing="4" Margin="0,0,16,4">
+                <CheckBox IsChecked="{Binding ShowNotLinked}" Color="{StaticResource DhAccent}" />
+                <Label Text="{loc:Tr Campaigns_NotLinked}" Style="{StaticResource Body}" VerticalOptions="Center" />
+            </HorizontalStackLayout>
+            <HorizontalStackLayout Spacing="4" Margin="0,0,16,4">
+                <CheckBox IsChecked="{Binding ShowFinished}" Color="{StaticResource DhAccent}" />
+                <Label Text="{loc:Tr Campaigns_Finished}" Style="{StaticResource Body}" VerticalOptions="Center" />
+            </HorizontalStackLayout>
+            <HorizontalStackLayout Spacing="4" Margin="0,0,16,4">
+                <CheckBox IsChecked="{Binding ShowExcluded}" Color="{StaticResource DhAccent}" />
+                <Label Text="{loc:Tr Campaigns_Excluded}" Style="{StaticResource Body}" VerticalOptions="Center" />
+            </HorizontalStackLayout>
+            <HorizontalStackLayout Spacing="4" Margin="0,0,16,4">
+                <CheckBox IsChecked="{Binding ShowDeduped}" Color="{StaticResource DhAccent}" />
+                <Label Text="{loc:Tr Campaigns_Deduped}" Style="{StaticResource Body}" VerticalOptions="Center" />
+            </HorizontalStackLayout>
+        </FlexLayout>
+
+        <Grid Grid.Row="2" ColumnDefinitions="Auto,*" ColumnSpacing="8">
+            <ActivityIndicator IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}"
+                               Color="{StaticResource DhAccent}" WidthRequest="18" HeightRequest="18" />
+            <Label Grid.Column="1" Text="{Binding LoadStatus}" Style="{StaticResource Muted}" VerticalOptions="Center" />
+        </Grid>
+
+        <CollectionView Grid.Row="3" ItemsSource="{Binding Campaigns}">
+            <CollectionView.ItemsLayout>
+                <LinearItemsLayout Orientation="Vertical" ItemSpacing="12" />
+            </CollectionView.ItemsLayout>
+            <CollectionView.EmptyView>
+                <Label Text="{loc:Tr Campaigns_NoMatch}" Style="{StaticResource Muted}" Padding="8" />
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="m:DropsCampaign">
+                    <Border Style="{StaticResource Card}">
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <Image Source="{Binding ImageUrl}" WidthRequest="68" HeightRequest="91"
+                                   Aspect="AspectFill" VerticalOptions="Start">
+                                <Image.Clip>
+                                    <RoundRectangleGeometry CornerRadius="6" Rect="0,0,68,91" />
+                                </Image.Clip>
+                            </Image>
+
+                            <VerticalStackLayout Grid.Column="1" Spacing="6">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <VerticalStackLayout>
+                                        <Label Text="{Binding Game.Name}" Style="{StaticResource Body}" FontAttributes="Bold" FontSize="16" />
+                                        <Label Text="{Binding Name}" Style="{StaticResource Muted}" />
+                                    </VerticalStackLayout>
+                                    <HorizontalStackLayout Grid.Column="1" Spacing="10" VerticalOptions="Start">
+                                        <Label Text="{loc:Tr Campaigns_Harvesting}" TextColor="{StaticResource DhAccent}" FontAttributes="Bold"
+                                               FontSize="12" VerticalOptions="Center" IsVisible="{Binding IsHarvesting}" />
+                                        <Label FontAttributes="Bold" FontSize="12" VerticalOptions="Center"
+                                               Text="{Binding LinkedText}"
+                                               TextColor="{Binding Linked, Converter={StaticResource BoolToColor}, ConverterParameter='DhGreen|DhGold'}" />
+                                    </HorizontalStackLayout>
+                                </Grid>
+
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <Label Style="{StaticResource Muted}" FontSize="12"
+                                           Text="{Binding EndsLocalText}" />
+                                    <Label Grid.Column="1" Style="{StaticResource Muted}" FontSize="12"
+                                           Text="{Binding RemainingText}" IsVisible="{Binding HasRemaining}" />
+                                </Grid>
+
+                                <!-- Overall campaign progress (% + done-count, based on the final drop) -->
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,2,0,0">
+                                    <ProgressBar Progress="{Binding Progress}" ProgressColor="{StaticResource DhGold}" VerticalOptions="Center" />
+                                    <Label Grid.Column="1" Text="{Binding OverallText}" Style="{StaticResource Muted}" FontSize="12" />
+                                </Grid>
+
+                                <!-- Compact horizontal rows (default view) -->
+                                <VerticalStackLayout IsVisible="{Binding Source={x:Reference Root}, Path=BindingContext.HorizontalView}"
+                                                     BindableLayout.ItemsSource="{Binding Drops}" Spacing="6" Margin="0,4,0,0">
+                                    <BindableLayout.ItemTemplate>
+                                        <DataTemplate x:DataType="m:TimedDrop">
+                                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                                <!-- reward icon -->
+                                                <Border WidthRequest="40" HeightRequest="40" Padding="0" VerticalOptions="Start"
+                                                        BackgroundColor="{StaticResource DhSurface2}" Stroke="{StaticResource DhBorder}"
+                                                        StrokeThickness="1" StrokeShape="RoundRectangle 6">
+                                                    <Image Source="{Binding RewardImageUrl}" Aspect="AspectFit" />
+                                                </Border>
+                                                <Grid Grid.Column="1" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" RowDefinitions="Auto,Auto,Auto">
+                                                    <Label Text="{Binding RewardName}" Style="{StaticResource Body}" FontSize="13" LineBreakMode="TailTruncation" />
+                                                    <Label Grid.Column="1" Text="{Binding ProgressSummary}" Style="{StaticResource Muted}" FontSize="12" />
+                                                    <Label Grid.Column="2" Text="{loc:Tr Campaigns_Claimed}" TextColor="{StaticResource DhGreen}" FontSize="12"
+                                                           IsVisible="{Binding IsClaimed}" />
+                                                    <ProgressBar Grid.Row="1" Grid.ColumnSpan="3" Progress="{Binding Progress}"
+                                                                 ProgressColor="{StaticResource DhAccent}" Margin="0,3,0,0" />
+                                                    <Label Grid.Row="2" Grid.ColumnSpan="3" Text="{Binding RemainingText}"
+                                                           Style="{StaticResource Muted}" FontSize="11" Margin="0,2,0,0"
+                                                           IsVisible="{Binding HasRemaining}" />
+                                                </Grid>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </BindableLayout.ItemTemplate>
+                                </VerticalStackLayout>
+
+                                <!-- Large vertical cards - wraps at most 5 per row (no horizontal scroll) -->
+                                <FlexLayout IsVisible="{Binding Source={x:Reference Root}, Path=BindingContext.VerticalView}"
+                                            Wrap="Wrap" Direction="Row" AlignItems="Start" JustifyContent="Start"
+                                            HorizontalOptions="Start" MaximumWidthRequest="620" Margin="0,4,0,0"
+                                            BindableLayout.ItemsSource="{Binding Drops}">
+                                    <BindableLayout.ItemTemplate>
+                                        <DataTemplate x:DataType="m:TimedDrop">
+                                            <Border WidthRequest="116" Margin="4" Padding="8" VerticalOptions="Start"
+                                                    BackgroundColor="{StaticResource DhSurface2}" Stroke="{StaticResource DhBorder}"
+                                                    StrokeThickness="1" StrokeShape="RoundRectangle 8">
+                                                <VerticalStackLayout Spacing="6">
+                                                    <Label Text="{Binding RewardName}" Style="{StaticResource Body}" FontSize="12"
+                                                           HorizontalTextAlignment="Center" MaxLines="2" LineBreakMode="TailTruncation"
+                                                           HeightRequest="34" />
+                                                    <Image Source="{Binding RewardImageUrl}" Aspect="AspectFit"
+                                                           WidthRequest="88" HeightRequest="88" HorizontalOptions="Center" />
+                                                    <ProgressBar Progress="{Binding Progress}" ProgressColor="{StaticResource DhAccent}" />
+                                                    <Label Text="{Binding PercentText}" Style="{StaticResource Muted}" FontSize="11"
+                                                           HorizontalTextAlignment="Center" IsVisible="{Binding NotClaimed}" />
+                                                    <Label Text="{Binding RemainingText}" Style="{StaticResource Muted}" FontSize="10"
+                                                           HorizontalTextAlignment="Center" IsVisible="{Binding HasRemaining}" />
+                                                    <Label Text="{loc:Tr Campaigns_ClaimedBadge}" TextColor="{StaticResource DhGreen}" FontSize="11" FontAttributes="Bold"
+                                                           HorizontalTextAlignment="Center" IsVisible="{Binding IsClaimed}" />
+                                                </VerticalStackLayout>
+                                            </Border>
+                                        </DataTemplate>
+                                    </BindableLayout.ItemTemplate>
+                                </FlexLayout>
+                            </VerticalStackLayout>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</ContentPage>

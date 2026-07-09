@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:DropHarvester.ViewModels"
+             xmlns:loc="clr-namespace:DropHarvester.Localization"
+             x:Class="DropHarvester.Views.LogPage"
+             x:DataType="vm:LogViewModel"
+             Title="Log"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="{StaticResource DhBg}">
+    <Grid RowDefinitions="Auto,*" Padding="16" RowSpacing="12">
+
+        <HorizontalStackLayout HorizontalOptions="End" Spacing="8">
+            <Button Text="{Binding CopyLabel}" Style="{StaticResource GhostButton}"
+                    MinimumWidthRequest="110" Command="{Binding CopyCommand}" />
+            <Button Text="{loc:Tr Log_Clear}" Style="{StaticResource GhostButton}"
+                    MinimumWidthRequest="100" Command="{Binding ClearCommand}" />
+        </HorizontalStackLayout>
+
+        <Border Grid.Row="1" Style="{StaticResource Card}" Padding="8">
+            <!-- KeepLastItemInView: follow the newest line as it's added instead of jumping to the top
+                 (which happened once the log filled up and started trimming from the top). -->
+            <CollectionView ItemsSource="{Binding Lines}" ItemsUpdatingScrollMode="KeepLastItemInView">
+                <CollectionView.EmptyView>
+                    <Label Text="{loc:Tr Log_NoLogOutputYet}" Style="{StaticResource Muted}" Padding="8" />
+                </CollectionView.EmptyView>
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="vm:LogLine">
+                        <Label Text="{Binding Text}" TextColor="{Binding Color}"
+                               FontSize="12" FontFamily="OpenSansRegular" Padding="4,1" />
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </Border>
+    </Grid>
+</ContentPage>

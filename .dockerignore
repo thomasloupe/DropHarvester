@@ -1,0 +1,23 @@
+# Keep the Docker build context small + reproducible. The Dockerfile only COPYs DropHarvester.Core/
+# and DropHarvester.Daemon/, but excluding the heavy/irrelevant bits speeds up context transfer and
+# avoids leaking build artifacts into the image.
+**/bin/
+**/obj/
+.git/
+.github/
+.vs/
+.idea/
+publish/
+docs/
+installer/Output/
+installer/*.exe
+installer/*.zip
+installer/*.pkg
+# Desktop-app-only assets the daemon never needs.
+Resources/
+Platforms/
+Views/
+ViewModels/
+Converters/
+**/*.user
+**/*.DotSettings.user

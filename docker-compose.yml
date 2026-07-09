@@ -1,0 +1,33 @@
+# DropHarvester headless daemon - run it as a background service.
+#
+#   docker compose up -d --build          # build + start
+#   docker compose logs -f                # first run: shows the twitch.tv/activate URL + code
+#   curl http://localhost:8080/status     # live JSON state
+#
+# The token + settings + stats persist in the named volume, so restarts resume without re-login.
+services:
+  dropharvester:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dropharvester-daemon:latest
+    container_name: dropharvester
+    restart: unless-stopped
+    stop_grace_period: 30s
+    # Optional: put your DH_* config in a .env file next to this compose file.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Sensible defaults; override in .env. See .env.example for the full list.
+      DH_HEALTH_PORT: "8080"
+      # DH_PRIORITY_GAMES: "Rust,Fortnite"
+      # DH_WEBHOOK_URL: "https://discord.com/api/webhooks/..."
+    ports:
+      - "8080:8080"          # /healthz + /status (remove if you don't need host access)
+      # - "5757:5757"        # rich debug server (/snapshot, /log, /claims-raw) - set DH_DEBUG_SERVER=true
+    volumes:
+      - dropharvester-data:/data
+
+volumes:
+  dropharvester-data:
