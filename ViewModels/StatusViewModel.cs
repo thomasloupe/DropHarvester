@@ -60,7 +60,7 @@ public partial class StatusViewModel : ObservableViewModel
         RefreshPendingUpdate();
         if (_settings.Settings.AutoCheckForUpdates)
         {
-            _ = CheckAndDownloadAsync();
+            _ = CheckForUpdateBannerAsync();
             _ = PollForUpdatesAsync();
         }
     }
@@ -81,7 +81,8 @@ public partial class StatusViewModel : ObservableViewModel
         catch { /* app shutting down */ }
     }
 
-    /// <summary>While the app stays open, silently re-check + pre-download once a day.</summary>
+    /// <summary>While the app stays open, re-check for a newer release once every 24 hours and raise the
+    /// "update available" banner if one appears.</summary>
     async Task PollForUpdatesAsync()
     {
         var timer = new PeriodicTimer(TimeSpan.FromHours(24));
@@ -90,7 +91,7 @@ public partial class StatusViewModel : ObservableViewModel
             while (await timer.WaitForNextTickAsync())
             {
                 if (_settings.Settings.AutoCheckForUpdates)
-                    await CheckAndDownloadAsync();
+                    await CheckForUpdateBannerAsync();
             }
         }
         catch { /* app shutting down */ }
@@ -188,16 +189,58 @@ public partial class StatusViewModel : ObservableViewModel
     [ObservableProperty] private bool _connectionIssueVisible;
     public string ConnectionIssueText => Loc.T("Status_ConnectionIssue");
 
-    // The updater silently downloads any newer version in the background; when one is downloaded it's
-    // "ready" and the user can Update now, or it auto-installs on the next launch.
+    // A newer GitHub release surfaces two ways: an "available" banner (checked, not yet downloaded) with a
+    // Download button, and - once downloaded - the "ready" banner with Update now. On the next launch a
+    // downloaded-but-unapplied update auto-installs.
     [ObservableProperty] private string _versionText = "";
-    [ObservableProperty] private bool _updateReady;      // a newer installer is downloaded + ready
+    [ObservableProperty] private bool _updateReady;        // a newer installer is downloaded + ready
+    [ObservableProperty] private bool _updateAvailable;    // a newer release exists (not yet downloaded)
+    [ObservableProperty] private bool _downloadingUpdate;  // the Download button is mid-download
+    [ObservableProperty] private string _latestVersion = "";
     [ObservableProperty] private string _updateStatus = "";
+    UpdateInfo? _availableInfo;                            // cached "available" check result (asset url)
 
-    /// <summary>Raises a change notification for UpdateReadyHidden when UpdateReady changes.</summary>
+    /// <summary>Raises change notifications for the "ready" and "available" banner visibility when
+    /// UpdateReady changes (the two are mutually exclusive).</summary>
     /// <param name="value">The new UpdateReady value.</param>
-    partial void OnUpdateReadyChanged(bool value) => OnPropertyChanged(nameof(UpdateReadyHidden));
+    partial void OnUpdateReadyChanged(bool value)
+    {
+        OnPropertyChanged(nameof(UpdateReadyHidden));
+        OnPropertyChanged(nameof(UpdateAvailableVisible));
+    }
     public bool UpdateReadyHidden => !UpdateReady;
+
+    /// <summary>Notifies the "available" banner's visibility + text when availability changes.</summary>
+    /// <param name="value">The new UpdateAvailable value.</param>
+    partial void OnUpdateAvailableChanged(bool value)
+    {
+        OnPropertyChanged(nameof(UpdateAvailableVisible));
+        OnPropertyChanged(nameof(UpdateAvailableDetail));
+    }
+    /// <summary>Notifies the "available" banner's text + the Download button's enabled state when the
+    /// download state changes.</summary>
+    /// <param name="value">The new DownloadingUpdate value.</param>
+    partial void OnDownloadingUpdateChanged(bool value)
+    {
+        OnPropertyChanged(nameof(UpdateAvailableDetail));
+        OnPropertyChanged(nameof(CanDownloadUpdate));
+    }
+
+    /// <summary>Whether the Download button is clickable (disabled while a download is in flight).</summary>
+    public bool CanDownloadUpdate => !DownloadingUpdate;
+    /// <summary>Notifies the "available" banner's text when the latest version changes.</summary>
+    /// <param name="value">The new LatestVersion value.</param>
+    partial void OnLatestVersionChanged(string value) => OnPropertyChanged(nameof(UpdateAvailableDetail));
+
+    /// <summary>The "update available" banner shows only when a newer release exists AND we haven't already
+    /// downloaded it (once downloaded, the "Update now" banner takes over).</summary>
+    public bool UpdateAvailableVisible => UpdateAvailable && !UpdateReady;
+
+    /// <summary>The "available" banner's detail line: the recommend-to-update message, or a downloading
+    /// note while the Download button is working.</summary>
+    public string UpdateAvailableDetail => DownloadingUpdate
+        ? Loc.T("Status_UpdateDownloading", LatestVersion)
+        : Loc.T("Status_UpdateAvailableDetail", LatestVersion);
 
     /// <summary>Reflect whether a pending installer is already downloaded (e.g. fetched last session or
     /// via Settings' check). Safe to call any time - the Status page calls it when it appears.</summary>
@@ -209,27 +252,51 @@ public partial class StatusViewModel : ObservableViewModel
             UpdateStatus = $"Update v{pending} is ready.";
     }
 
-    /// <summary>Silently check the manifest and, if newer, download the installer to the pending cache.
-    /// No prompt, no progress bar - just flips to "ready" when done.</summary>
-    async Task CheckAndDownloadAsync()
+    /// <summary>Check GitHub for a newer release and, if one exists, raise the "update available" banner.
+    /// Does NOT download - the user starts that with the Download button. Silent on failure.</summary>
+    async Task CheckForUpdateBannerAsync()
     {
         try
         {
             RefreshPendingUpdate();
             if (UpdateReady)
-                return; // already have one downloaded
+                return; // a downloaded update already waits -> its own "Update now" banner shows
 
             var info = await _update.CheckAsync();
             if (info.Error is not null || !info.UpdateAvailable)
                 return; // stay quiet on failure / when current
 
-            UpdateStatus = $"Downloading update v{info.LatestVersion}...";
-            await _update.DownloadAsync(info);
-            RefreshPendingUpdate();
-            if (!UpdateReady)
-                UpdateStatus = "";
+            _availableInfo = info;
+            LatestVersion = info.LatestVersion ?? "";
+            UpdateAvailable = true;
         }
         catch { /* best-effort, silent */ }
+    }
+
+    /// <summary>Download the available release's installer to the pending cache (the Download button on the
+    /// "update available" banner). When it lands, the "Update now" banner takes over.</summary>
+    [RelayCommand]
+    async Task DownloadUpdateAsync()
+    {
+        if (DownloadingUpdate)
+            return;
+        // re-check if the asset url isn't cached, so the button always works
+        var info = _availableInfo ?? await _update.CheckAsync();
+        if (!info.UpdateAvailable)
+        {
+            UpdateAvailable = false;
+            return;
+        }
+        DownloadingUpdate = true;
+        try
+        {
+            var ok = await _update.DownloadAsync(info);
+            RefreshPendingUpdate();
+            if (ok)
+                UpdateAvailable = false; // hand off to the "Update now" banner
+        }
+        catch { /* leave the banner up so the user can retry */ }
+        finally { DownloadingUpdate = false; }
     }
 
     /// <summary>Installs the downloaded update by launching the installer and hard-exiting the app.</summary>

@@ -14,8 +14,24 @@
     <ScrollView>
         <VerticalStackLayout Padding="24" Spacing="18">
 
-            <!-- ===== Update banner (shows only when a newer version has already been downloaded and is
-                 ready to install; otherwise updates pull silently and auto-install on next restart) ===== -->
+            <!-- ===== Update AVAILABLE banner (a newer GitHub release exists but hasn't been downloaded
+                 yet; Download fetches its installer, then the "ready" banner below takes over) ===== -->
+            <Border Style="{StaticResource Card}" Padding="14,10" IsVisible="{Binding UpdateAvailableVisible}">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                    <Label Text="&#x2191;" TextColor="{StaticResource DhGold}" FontSize="20" FontAttributes="Bold"
+                           VerticalOptions="Center" />
+                    <VerticalStackLayout Grid.Column="1" Spacing="0" VerticalOptions="Center">
+                        <Label Text="{loc:Tr Status_UpdateAvailableTitle}" Style="{StaticResource Body}" FontAttributes="Bold" />
+                        <Label Text="{Binding UpdateAvailableDetail}" Style="{StaticResource Muted}" FontSize="12" />
+                    </VerticalStackLayout>
+                    <Button Grid.Column="2" Text="{loc:Tr Status_Download}" Style="{StaticResource PrimaryButton}"
+                            MinimumWidthRequest="150" Command="{Binding DownloadUpdateCommand}"
+                            IsEnabled="{Binding CanDownloadUpdate}" />
+                </Grid>
+            </Border>
+
+            <!-- ===== Update READY banner (shows only when a newer version has already been downloaded and
+                 is ready to install; a downloaded update also auto-installs on the next restart) ===== -->
             <Border Style="{StaticResource Card}" Padding="14,10" IsVisible="{Binding UpdateReady}">
                 <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
                     <Label Text="&#x2191;" TextColor="{StaticResource DhGold}" FontSize="20" FontAttributes="Bold"

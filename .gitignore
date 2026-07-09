@@ -54,9 +54,5 @@ stats.json
 *.secret
 *.pfx
 
-# Update endpoint - deployment URL kept out of the public repo
-Services/UpdateEndpoint.Private.cs
-installer/manifest.json
-
 # Installer / release builder tooling - not part of the public app source
 installer/

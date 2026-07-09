@@ -1,6 +1,6 @@
 using System.Diagnostics;
-using System.Net.Http.Headers;
 using System.Text.Json;
+using Octokit;
 
 namespace DropHarvester.Services;
 
@@ -13,18 +13,10 @@ public sealed record UpdateInfo(
     string? Error = null);
 
 /// <summary>
-/// Self-hosted-manifest updater using a real installer (Inno Setup .exe on Windows, .pkg on macOS).
-/// On startup the app silently checks the manifest and, if a newer version exists, downloads the
-/// installer to a pending cache. The user can apply it NOW ("Update" button) or it auto-applies on the
-/// next launch. No "download" step or yes/no prompt.
-///
-/// The manifest URL comes from <see cref="UpdateEndpoint"/> (kept out of source); it points at a small
-/// JSON document of the shape:
-/// <code>
-/// { "windows": { "version": "1.4.5", "url": ".../DropHarvester-1.4.5-win-x64.exe" },
-///   "mac":     { "version": "1.4.5", "url": ".../DropHarvester-1.4.5.pkg" } }
-/// </code>
-/// When no endpoint is configured, the update check is a no-op.
+/// GitHub-Releases updater backed by a real installer (Inno Setup .exe on Windows, .pkg on macOS).
+/// The check asks the GitHub API for the repo's latest published release; if its tag is newer than the
+/// running build, the matching per-OS asset (the .exe / .pkg) is the download. A downloaded installer is
+/// cached "pending" - the user applies it now ("Update now") or it auto-applies on the next launch.
 /// </summary>
 public interface IUpdateService
 {
@@ -53,10 +45,15 @@ public interface IUpdateService
     bool TryAutoApplyOnStartup();
 }
 
-/// <summary>Default <see cref="IUpdateService"/>: manifest-driven installer updater backed by a LocalAppData pending cache.</summary>
+/// <summary>Default <see cref="IUpdateService"/>: GitHub-Releases installer updater backed by a LocalAppData pending cache.</summary>
 public sealed class UpdateService : IUpdateService
 {
     const string ExeName = "DropHarvester.exe";
+
+    // The public repo whose Releases drive updates. Not a secret - it's the public project page.
+    const string RepoOwner = "thomasloupe";
+    const string RepoName = "DropHarvester";
+
     static readonly HttpClient Http = new() { Timeout = TimeSpan.FromMinutes(10) };
 
     public string CurrentVersion { get; } = ResolveVersion();
@@ -75,7 +72,9 @@ public sealed class UpdateService : IUpdateService
         return "1.0.0";
     }
 
-    static string OsKey => OperatingSystem.IsWindows() ? "windows" : "mac";
+    // The installer extension we want for THIS OS: Windows ships an .exe, macOS a .pkg. Used to pick the
+    // right asset off the release.
+    static string AssetExtension => OperatingSystem.IsWindows() ? ".exe" : ".pkg";
 
     // Pending-installer cache in LocalAppData (never touches FileSystem.AppDataDirectory, whose lazy
     // initializer can throw during very early startup).
@@ -83,35 +82,39 @@ public sealed class UpdateService : IUpdateService
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DropHarvester", "pending-update");
     static string PendingJson => Path.Combine(PendingDir, "pending.json");
 
-    /// <summary>Fetches the manifest and reports whether a newer version is available for this OS.</summary>
-    /// <param name="ct">Cancels the manifest request.</param>
-    /// <returns>The check result, including any error message instead of throwing.</returns>
+    /// <summary>Asks GitHub for the repo's latest published release and reports whether it's newer than
+    /// the running build, along with the download URL of this OS's installer asset.</summary>
+    /// <param name="ct">Cancels the API request.</param>
+    /// <returns>The check result, including any error message instead of throwing. A repo with no
+    /// published releases is reported as "up to date" (no error), not a failure.</returns>
     public async Task<UpdateInfo> CheckAsync(CancellationToken ct = default)
     {
-        var manifestUrl = UpdateEndpoint.ManifestUrl;
-        if (string.IsNullOrWhiteSpace(manifestUrl))
-            return new UpdateInfo(CurrentVersion, null, false, null); // no endpoint configured -> self-update disabled
-
         try
         {
-            using var req = new HttpRequestMessage(HttpMethod.Get, manifestUrl);
-            req.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true, NoStore = true };
-            req.Headers.UserAgent.ParseAdd("DropHarvester");
+            var gh = new GitHubClient(new ProductHeaderValue("DropHarvester", CurrentVersion));
+            Release release;
+            try
+            {
+                // latest = most recent NON-prerelease, non-draft release
+                release = await gh.Repository.Release.GetLatest(RepoOwner, RepoName).ConfigureAwait(false);
+            }
+            catch (NotFoundException)
+            {
+                // no published releases yet -> nothing to update to (not an error)
+                return new UpdateInfo(CurrentVersion, null, false, null);
+            }
 
-            using var resp = await Http.SendAsync(req, HttpCompletionOption.ResponseContentRead, ct).ConfigureAwait(false);
-            resp.EnsureSuccessStatusCode();
-            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
-
-            if (!doc.RootElement.TryGetProperty(OsKey, out var os) || os.ValueKind != JsonValueKind.Object)
-                return new UpdateInfo(CurrentVersion, null, false, null, $"No '{OsKey}' entry in the update manifest.");
-
-            var latest = os.TryGetProperty("version", out var v) ? v.GetString() : null;
-            var url = os.TryGetProperty("url", out var u) ? u.GetString() : null;
+            var latest = release.TagName;
             if (string.IsNullOrWhiteSpace(latest))
-                return new UpdateInfo(CurrentVersion, null, false, null, "Update manifest has no version.");
+                return new UpdateInfo(CurrentVersion, null, false, null, "Latest release has no version tag.");
 
-            var available = IsNewer(latest, CurrentVersion);
-            return new UpdateInfo(CurrentVersion, latest, available, url);
+            // pick this OS's installer asset (the .exe on Windows, the .pkg on macOS)
+            var asset = release.Assets.FirstOrDefault(
+                a => a.Name.EndsWith(AssetExtension, StringComparison.OrdinalIgnoreCase));
+            var url = asset?.BrowserDownloadUrl;
+
+            var available = IsNewer(latest, CurrentVersion) && !string.IsNullOrEmpty(url);
+            return new UpdateInfo(CurrentVersion, Norm(latest), available, url);
         }
         catch (Exception ex)
         {
@@ -147,7 +150,9 @@ public sealed class UpdateService : IUpdateService
             {
                 try
                 {
-                    using var resp = await Http.GetAsync(info.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+                    using var dreq = new HttpRequestMessage(HttpMethod.Get, info.DownloadUrl);
+                    dreq.Headers.UserAgent.ParseAdd("DropHarvester"); // GitHub asset downloads want a UA
+                    using var resp = await Http.SendAsync(dreq, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
                     resp.EnsureSuccessStatusCode();
                     var total = resp.Content.Headers.ContentLength;
                     await using (var src = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false))
