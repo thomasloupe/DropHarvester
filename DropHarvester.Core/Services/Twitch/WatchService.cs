@@ -17,6 +17,14 @@ public interface IWatchService
     /// <param name="channel">Channel to credit the watch minute to.</param>
     /// <param name="ct">Token to cancel the send.</param>
     Task<bool> SendWatchAsync(TwitchChannel channel, CancellationToken ct = default);
+
+    /// <summary>Debug-only: send one minute-watched heartbeat and return the full round-trip (the exact
+    /// decoded payload, the encoded blob size, the HTTP status, the raw GQL response body, and the sent
+    /// headers) so a 204-acked-but-not-credited watch can be inspected end to end.</summary>
+    /// <param name="channel">Channel to probe the watch for.</param>
+    /// <param name="ct">Token to cancel the send.</param>
+    /// <returns>A diagnostic object describing exactly what was sent and what Twitch returned.</returns>
+    Task<object> ProbeAsync(TwitchChannel channel, CancellationToken ct = default);
 }
 
 /// <summary>Default <see cref="IWatchService"/> that sends minute-watched events via GraphQL.</summary>
@@ -45,31 +53,7 @@ public sealed class WatchService : IWatchService
         if (!channel.Online || string.IsNullOrEmpty(channel.BroadcastId))
             return false;
 
-        var userId = _auth.State.UserId ?? "";
-        var evt = new[]
-        {
-            new Dictionary<string, object?>
-            {
-                ["event"] = "minute-watched",
-                ["properties"] = new Dictionary<string, object?>
-                {
-                    ["broadcast_id"] = channel.BroadcastId,
-                    ["channel_id"] = channel.Id,
-                    ["channel"] = channel.Login,
-                    ["client_time"] = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
-                    ["game"] = channel.Game?.Name ?? "",
-                    ["game_id"] = channel.Game?.Id ?? "",
-                    ["hidden"] = false,
-                    ["is_live"] = true,
-                    ["live"] = true,
-                    ["logged_in"] = true,
-                    ["minutes_logged"] = 1,
-                    ["muted"] = false,
-                    ["user_id"] = userId,
-                },
-            },
-        };
-
+        var evt = BuildMinuteWatched(channel, _auth.State.UserId ?? "");
         var encoded = EncodePayload(evt);
 
         try
@@ -101,6 +85,87 @@ public sealed class WatchService : IWatchService
 
         return false;
     }
+
+    /// <summary>Debug-only: send one minute-watched heartbeat and report the full round-trip so a
+    /// 204-acked-but-not-credited watch can be inspected end to end.</summary>
+    /// <param name="channel">Channel to probe the watch for.</param>
+    /// <param name="ct">Token to cancel the send.</param>
+    /// <returns>A diagnostic object: the decoded payload, encoded size, HTTP status, response body, and headers.</returns>
+    public async Task<object> ProbeAsync(TwitchChannel channel, CancellationToken ct = default)
+    {
+        var userId = _auth.State.UserId ?? "";
+        var eligible = channel.Online && !string.IsNullOrEmpty(channel.BroadcastId);
+        var evt = BuildMinuteWatched(channel, userId);
+        var payloadJson = JsonSerializer.Serialize(evt, new JsonSerializerOptions { WriteIndented = true });
+        var encoded = EncodePayload(evt);
+
+        object? gql = null;
+        string? error = null;
+        try
+        {
+            var probe = await _gql.ProbeRawAsync(
+                TwitchConstants.SendSpadeEventsMutation,
+                new { input = new { data = encoded, repository = "twilight", encoding = "GZIP_B64" } },
+                ct).ConfigureAwait(false);
+            gql = new
+            {
+                probe.HttpStatus,
+                ResponseBody = probe.ResponseBody,
+                SentHeaders = probe.SentHeaders,
+                RequestEnvelopeJson = probe.RequestJson,
+            };
+        }
+        catch (Exception ex)
+        {
+            error = $"{ex.GetType().Name}: {ex.Message}";
+        }
+
+        return new
+        {
+            Channel = channel.Login,
+            ChannelId = channel.Id,
+            BroadcastId = channel.BroadcastId,
+            Game = channel.Game?.Name,
+            channel.Online,
+            WouldSendInNormalLoop = eligible,
+            UserId = userId,
+            DecodedPayload = evt,
+            DecodedPayloadJson = payloadJson,
+            EncodedBase64Length = encoded.Length,
+            Gql = gql,
+            Error = error,
+        };
+    }
+
+    /// <summary>Builds the single minute-watched spade event array shared by the live send and the probe,
+    /// so both are byte-for-byte identical.</summary>
+    /// <param name="channel">Channel the minute is credited to.</param>
+    /// <param name="userId">Logged-in user id.</param>
+    /// <returns>The one-element event array ready to encode.</returns>
+    static Dictionary<string, object?>[] BuildMinuteWatched(TwitchChannel channel, string userId) =>
+        new[]
+        {
+            new Dictionary<string, object?>
+            {
+                ["event"] = "minute-watched",
+                ["properties"] = new Dictionary<string, object?>
+                {
+                    ["broadcast_id"] = channel.BroadcastId,
+                    ["channel_id"] = channel.Id,
+                    ["channel"] = channel.Login,
+                    ["client_time"] = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+                    ["game"] = channel.Game?.Name ?? "",
+                    ["game_id"] = channel.Game?.Id ?? "",
+                    ["hidden"] = false,
+                    ["is_live"] = true,
+                    ["live"] = true,
+                    ["logged_in"] = true,
+                    ["minutes_logged"] = 1,
+                    ["muted"] = false,
+                    ["user_id"] = userId,
+                },
+            },
+        };
 
     /// <summary>json_minify -> utf8 -> gzip -> base64 encoding pipeline.</summary>
     /// <param name="payload">Object serialized as the spade-event payload.</param>

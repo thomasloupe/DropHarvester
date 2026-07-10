@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using DropHarvester.Models.Events;
+using DropHarvester.Models.Twitch;
 using DropHarvester.Services.Twitch;
 
 namespace DropHarvester.Services;
@@ -34,6 +35,7 @@ public sealed class DebugServer : IDebugServer
     readonly IHarvesterOrchestrator _harvester;
     readonly IHarvesterEventBus _bus;
     readonly IInventoryService _inventory;
+    readonly IIntegrityService _integrity;
     readonly object _logLock = new();
     readonly LinkedList<string> _log = new();
     const int MaxLog = 2000;
@@ -48,11 +50,13 @@ public sealed class DebugServer : IDebugServer
     /// <param name="harvester">Orchestrator queried for the live debug snapshot.</param>
     /// <param name="bus">Event bus whose events feed the rolling log.</param>
     /// <param name="inventory">Inventory service used for the raw claim-history endpoint.</param>
-    public DebugServer(IHarvesterOrchestrator harvester, IHarvesterEventBus bus, IInventoryService inventory)
+    /// <param name="integrity">Integrity service exposed via the /integrity debug endpoint.</param>
+    public DebugServer(IHarvesterOrchestrator harvester, IHarvesterEventBus bus, IInventoryService inventory, IIntegrityService integrity)
     {
         _harvester = harvester;
         _bus = bus;
         _inventory = inventory;
+        _integrity = integrity;
         _bus.Event += OnEvent; // keep a rolling log regardless of whether the server is up
     }
 
@@ -163,7 +167,9 @@ public sealed class DebugServer : IDebugServer
     /// <returns>The content type and response body for the path (a not-found message for unknown paths).</returns>
     async Task<(string contentType, string body)> RouteAsync(string rawPath, CancellationToken ct)
     {
-        var path = rawPath.Split('?')[0].TrimEnd('/');
+        var split = rawPath.Split('?', 2);
+        var path = split[0].TrimEnd('/');
+        var query = ParseQuery(split.Length > 1 ? split[1] : "");
         try
         {
             return path switch
@@ -173,13 +179,78 @@ public sealed class DebugServer : IDebugServer
                 "/log" => ("text/plain", LogText()),
                 "/crashlog" => ("text/plain", CrashLogText()),
                 "/claims-raw" => ("application/json", await _inventory.GetClaimHistoryRawJsonAsync(ct).ConfigureAwait(false)),
-                _ => ("text/plain", "Not found. Try / , /snapshot , /claims-raw , /crashlog or /log"),
+                "/harvest" => ("application/json", Harvest(query)),
+                "/watch-probe" => ("application/json", JsonSerializer.Serialize(await _harvester.DebugWatchProbeAsync(ct).ConfigureAwait(false), JsonOpts)),
+                "/authstate" => ("application/json", JsonSerializer.Serialize(_harvester.DebugAuthState(), JsonOpts)),
+                "/integrity" => ("application/json", JsonSerializer.Serialize(_integrity.DebugState(), JsonOpts)),
+                "/set-integrity" => ("application/json", SetIntegrity(query)),
+                _ => ("text/plain", "Not found. Try / , /snapshot , /claims-raw , /watch-probe , /authstate , /harvest , /crashlog or /log"),
             };
         }
         catch (Exception ex)
         {
             return ("text/plain", $"Error building {path}: {ex.Message}\n{ex}");
         }
+    }
+
+    /// <summary>Handles /harvest: with ?clear=1 releases the override, with ?id=X pins that campaign/drop,
+    /// and with no query returns the current override plus the list of harvestable targets to pick from.</summary>
+    /// <param name="query">Parsed query parameters from the request.</param>
+    /// <returns>A JSON result describing the action taken or the available targets.</returns>
+    string Harvest(Dictionary<string, string> query)
+    {
+        if (query.ContainsKey("clear"))
+        {
+            _harvester.ClearCampaignOverride();
+            return JsonSerializer.Serialize(new { Result = "Override cleared - resuming automatic selection." }, JsonOpts);
+        }
+        if (query.TryGetValue("id", out var id) && !string.IsNullOrWhiteSpace(id))
+            return JsonSerializer.Serialize(new { Result = _harvester.DebugForceHarvest(id) }, JsonOpts);
+
+        return JsonSerializer.Serialize(new
+        {
+            Usage = "/harvest?id=<campaignId or dropId> to pin a target, /harvest?clear=1 to release.",
+            CurrentOverride = _harvester.OverrideCampaignId,
+            Targets = _harvester.DebugHarvestTargets(),
+        }, JsonOpts);
+    }
+
+    /// <summary>Handles /set-integrity: injects an externally-obtained integrity token (testing hook) bound
+    /// to a client-id (client=web|android or a raw client-id), so a real Kasada-backed token can be tried.</summary>
+    /// <param name="query">Parsed query parameters (token, client, ttl).</param>
+    /// <returns>A JSON result confirming the injection or describing the missing input.</returns>
+    string SetIntegrity(Dictionary<string, string> query)
+    {
+        if (!query.TryGetValue("token", out var token) || string.IsNullOrWhiteSpace(token))
+            return JsonSerializer.Serialize(new { Error = "Provide ?token=<integrity>&client=web|android[&ttl=<minutes>]." }, JsonOpts);
+        var clientArg = query.TryGetValue("client", out var c) ? c : "web";
+        var clientId = clientArg.ToLowerInvariant() switch
+        {
+            "web" => TwitchConstants.WebClientId,
+            "android" => TwitchConstants.AndroidAppClientId,
+            _ => clientArg, // allow a raw client-id
+        };
+        var ttl = query.TryGetValue("ttl", out var t) && double.TryParse(t, out var m) ? m : 120;
+        var deviceId = query.TryGetValue("device", out var dv) ? dv : null;
+        _integrity.SetOverride(token, clientId, deviceId, ttl);
+        return JsonSerializer.Serialize(new { Result = $"Injected integrity token ({token.Length} chars) bound to client {clientId}, device {(string.IsNullOrEmpty(deviceId) ? "app" : "override")}, trusted {ttl:0}m." }, JsonOpts);
+    }
+
+    /// <summary>Parses a raw URL query string into a case-insensitive key/value map (URL-decoded).</summary>
+    /// <param name="raw">The query portion after '?', without the leading '?'.</param>
+    /// <returns>Decoded key/value pairs; valueless keys map to an empty string.</returns>
+    static Dictionary<string, string> ParseQuery(string raw)
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrEmpty(raw))
+            return map;
+        foreach (var pair in raw.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var kv = pair.Split('=', 2);
+            var key = Uri.UnescapeDataString(kv[0]);
+            map[key] = kv.Length > 1 ? Uri.UnescapeDataString(kv[1]) : "";
+        }
+        return map;
     }
 
     /// <summary>Returns the rolling log joined into a single newline-separated string.</summary>
@@ -210,6 +281,9 @@ public sealed class DebugServer : IDebugServer
         + "<h1>DropHarvester debug</h1>"
         + "<a href=\"/snapshot\">/snapshot</a> - live harvester state + per-campaign/drop decisions (JSON)"
         + "<a href=\"/claims-raw\">/claims-raw</a> - raw claim history from Twitch (gameEventDrops, JSON)"
+        + "<a href=\"/watch-probe\">/watch-probe</a> - send one minute-watched heartbeat now, dump the full request/response (JSON)"
+        + "<a href=\"/authstate\">/authstate</a> - current auth/session context, secrets redacted (JSON)"
+        + "<a href=\"/harvest\">/harvest</a> - list harvestable targets; ?id=&lt;id&gt; pins one, ?clear=1 releases (JSON)"
         + "<a href=\"/log\">/log</a> - rolling log (text)"
         + "<a href=\"/crashlog\">/crashlog</a> - caught crashes and UI-dispatch errors (text)"
         + "</body></html>";

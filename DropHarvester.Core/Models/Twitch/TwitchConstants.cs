@@ -27,6 +27,7 @@ public static class TwitchConstants
     public const string ActivateUrl = "https://www.twitch.tv/activate";
 
     public const string GqlUrl = "https://gql.twitch.tv/gql";
+    public const string GqlIntegrityUrl = "https://gql.twitch.tv/integrity";
     public const string PubSubUrl = "wss://pubsub-edge.twitch.tv/v1";
 
     /// <summary>Login-code activation needs no scopes (empty string).</summary>

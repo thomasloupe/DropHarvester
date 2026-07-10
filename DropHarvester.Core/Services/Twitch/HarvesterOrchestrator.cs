@@ -71,6 +71,26 @@ public interface IHarvesterOrchestrator
     /// <summary>Clear the manual override and let DropHarvester resume automatic campaign selection.</summary>
     void ClearCampaignOverride();
 
+    /// <summary>Debug/testing: pin the harvester onto the campaign that owns the given campaign OR drop id
+    /// (held until cleared), so one specific drop can be exercised on demand. Returns a human-readable
+    /// result describing the target, or why nothing matched.</summary>
+    /// <param name="id">A campaign id or a drop id to resolve to its campaign and harvest.</param>
+    string DebugForceHarvest(string id);
+
+    /// <summary>Debug/testing: the campaigns the harvester could pin right now, each with its id and first
+    /// unclaimed drop id, so a /harvest target can be picked without guessing ids.</summary>
+    IReadOnlyList<object> DebugHarvestTargets();
+
+    /// <summary>Debug/testing: send one minute-watched heartbeat for the ACTIVE channel right now and return
+    /// the full round-trip (exact payload, HTTP status, raw response, sent headers) to diagnose a
+    /// 204-acked-but-not-credited watch.</summary>
+    /// <param name="ct">Token to cancel the probe.</param>
+    Task<object> DebugWatchProbeAsync(CancellationToken ct = default);
+
+    /// <summary>Debug/testing: the current auth/session context (ids present, token length, validated-at),
+    /// with secrets redacted, to confirm the request is authenticated as expected.</summary>
+    object DebugAuthState();
+
     /// <summary>Whether the harvester considers this campaign (by id) finished - all drops claimed/earned per
     /// its authoritative, continuously-updated claim state. The Inventory's Finished filter uses this so
     /// it can't disagree with what the harvester will actually harvest.</summary>
@@ -308,6 +328,99 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
         _switchRequested = true; // re-pick using the normal automatic order
         Wake();
         Log("Override removed - resuming automatic campaign selection.");
+    }
+
+    /// <summary>Debug/testing: pin the harvester onto the campaign owning the given campaign OR drop id and
+    /// re-pick now, so a specific drop can be exercised on demand. Resolves an id that is either a campaign
+    /// id or one of its drops' ids. Held until cleared (dropOnly=false) so crediting can be watched over
+    /// several minutes.</summary>
+    /// <param name="id">A campaign id or a drop id to resolve to its campaign and harvest.</param>
+    /// <returns>A human-readable result describing the pinned target, or why nothing matched.</returns>
+    public string DebugForceHarvest(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return "No id supplied. Use /harvest?id=<campaignId or dropId>, /harvest?clear=1, or /harvest to list targets.";
+
+        var wanted = id.Trim();
+        var known = _campaigns; // capture the atomically-swapped ref before enumerating
+
+        var campaign = known.FirstOrDefault(c => string.Equals(c.Id, wanted, StringComparison.OrdinalIgnoreCase));
+        TimedDrop? drop = null;
+        if (campaign is null)
+        {
+            foreach (var c in known)
+            {
+                drop = c.Drops.FirstOrDefault(d => string.Equals(d.Id, wanted, StringComparison.OrdinalIgnoreCase));
+                if (drop is not null) { campaign = c; break; }
+            }
+        }
+
+        if (campaign is null)
+            return $"No campaign or drop matches id '{wanted}'. Hit /harvest (no query) to list harvestable campaign and drop ids.";
+
+        SetCampaignOverride(campaign.Id, dropOnly: false);
+        var target = drop ?? campaign.FirstUnharvestedDrop;
+        return target is null
+            ? $"Pinned '{campaign.Name}' [{campaign.Game.Name}] (id {campaign.Id}) - no unclaimed drop left to harvest."
+            : $"Pinned '{campaign.Name}' [{campaign.Game.Name}] -> drop '{target.RewardName}' ({target.CurrentMinutes}/{target.RequiredMinutes}m, id {target.Id}). Watch /snapshot for movement; /harvest?clear=1 to release.";
+    }
+
+    /// <summary>Debug/testing: the campaigns the harvester could pin right now, each with its id and first
+    /// unclaimed drop, so a /harvest target can be picked without guessing ids.</summary>
+    /// <returns>An anonymous-object list (campaign id/name/game/linked/eligible + first unclaimed drop).</returns>
+    public IReadOnlyList<object> DebugHarvestTargets()
+    {
+        var known = _campaigns;
+        var list = new List<object>();
+        foreach (var c in known)
+        {
+            var next = c.FirstUnharvestedDrop;
+            list.Add(new
+            {
+                CampaignId = c.Id,
+                Campaign = c.Name,
+                Game = c.Game.Name,
+                c.Linked,
+                LiveStreamers = _liveCountByGame.TryGetValue(c.Game.Id, out var lc) ? lc : 0,
+                Finished = IsCampaignFinishedForHarvesting(c),
+                NextDropId = next?.Id,
+                NextDrop = next?.RewardName,
+                NextDropProgress = next is null ? null : $"{next.CurrentMinutes}/{next.RequiredMinutes}m",
+            });
+        }
+        return list;
+    }
+
+    /// <summary>Debug/testing: send one minute-watched heartbeat for the active channel and return the full
+    /// round-trip for inspection, or an explanation when there is no active channel to probe.</summary>
+    /// <param name="ct">Token to cancel the probe.</param>
+    /// <returns>The watch-probe diagnostic, or a note that nothing is being watched.</returns>
+    public async Task<object> DebugWatchProbeAsync(CancellationToken ct = default)
+    {
+        if (ActiveChannel is not { } ch)
+            return new { Error = "No active channel - the harvester isn't watching anything right now. Pin one with /harvest?id=<id> first." };
+        return await _watch.ProbeAsync(ch, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Debug/testing: the current auth/session context with secrets redacted.</summary>
+    /// <returns>An anonymous object describing the logged-in identity and token presence.</returns>
+    public object DebugAuthState()
+    {
+        var s = _auth.State;
+        return new
+        {
+            LoggedIn = _auth.IsLoggedIn,
+            s.UserId,
+            s.Username,
+            s.DisplayName,
+            s.ClientId,
+            ClientIdIsAndroidApp = string.Equals(s.ClientId, TwitchConstants.AndroidAppClientId, StringComparison.Ordinal),
+            DeviceIdPresent = !string.IsNullOrEmpty(s.DeviceId),
+            DeviceIdLength = s.DeviceId?.Length ?? 0,
+            AccessTokenPresent = !string.IsNullOrEmpty(s.AccessToken),
+            AccessTokenLength = s.AccessToken?.Length ?? 0,
+            s.ValidatedAtUtc,
+        };
     }
 
     /// <summary>Release a manual override whose target campaign is finished (or no longer present), so the

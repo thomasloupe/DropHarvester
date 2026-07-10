@@ -29,6 +29,7 @@ public static class DropHarvesterCoreServiceCollectionExtensions
         services.AddSingleton<IStatsService, StatsService>();
 
         // Harvesting engine.
+        services.AddSingleton<IIntegrityService, IntegrityService>();
         services.AddSingleton<IGqlClient, GqlClient>();
         services.AddSingleton<IWatchService, WatchService>();
         services.AddSingleton<IInventoryService, InventoryService>();
