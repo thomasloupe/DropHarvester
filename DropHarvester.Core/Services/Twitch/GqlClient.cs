@@ -30,30 +30,13 @@ public interface IGqlClient
     /// <returns>Cloned root JSON element of the response.</returns>
     Task<JsonElement> PersistedAsync(string operationName, string sha256Hash, object? variables, CancellationToken ct = default);
 
-    /// <summary>Run a raw-query mutation (used only by the watch payload).</summary>
+    /// <summary>Run a raw-query operation (e.g. the directory game search).</summary>
     /// <param name="query">Raw GraphQL query text.</param>
     /// <param name="variables">Query variables.</param>
     /// <param name="ct">Token to cancel the request.</param>
     /// <returns>Cloned root JSON element of the response.</returns>
     Task<JsonElement> RawAsync(string query, object variables, CancellationToken ct = default);
-
-    /// <summary>Debug-only: POST a raw query ONCE (no retry masking) and return the full HTTP round-trip
-    /// (status, body, and the headers we actually sent, token redacted) so a 204-acked-but-not-credited
-    /// watch can be inspected end to end.</summary>
-    /// <param name="query">Raw GraphQL query text.</param>
-    /// <param name="variables">Query variables.</param>
-    /// <param name="ct">Token to cancel the request.</param>
-    /// <returns>The status code, response body, and redacted sent headers.</returns>
-    Task<GqlProbeResult> ProbeRawAsync(string query, object variables, CancellationToken ct = default);
 }
-
-/// <summary>Full HTTP detail of a one-shot debug probe: the status Twitch returned, the raw response body,
-/// the headers we actually sent (Authorization redacted), and the request JSON.</summary>
-/// <param name="HttpStatus">HTTP status code Twitch returned.</param>
-/// <param name="ResponseBody">Raw response body text.</param>
-/// <param name="SentHeaders">Headers sent on the request, with the token redacted.</param>
-/// <param name="RequestJson">The serialized GraphQL request body.</param>
-public sealed record GqlProbeResult(int HttpStatus, string ResponseBody, Dictionary<string, string> SentHeaders, string RequestJson);
 
 /// <summary>Default <see cref="IGqlClient"/> posting to Twitch's private GraphQL endpoint.</summary>
 public sealed class GqlClient : IGqlClient, IDisposable
@@ -62,25 +45,21 @@ public sealed class GqlClient : IGqlClient, IDisposable
 
     readonly ITwitchAuth _auth;
     readonly IHarvesterEventBus _bus;
-    readonly IIntegrityService _integrity;
     readonly HttpClient _http;
-    // Stable per-run session id; Twitch uses it to tie minute-watched events to one watch
-    // session. Without it the watch is accepted (204) but not credited toward drops.
+    // Stable per-run session id; Twitch uses it to tie requests to one client session.
     readonly string _sessionId = System.Security.Cryptography.RandomNumberGenerator.GetHexString(16).ToLowerInvariant();
 
     // Bounded retry-with-backoff for transient failures (network errors, timeouts, 5xx, 429). Auth
     // (401) and user cancellation are never retried.
     const int MaxAttempts = 3;
 
-    /// <summary>Creates the client with auth, integrity, event bus, and an HttpClient built from settings.</summary>
+    /// <summary>Creates the client with auth, event bus, and an HttpClient built from settings.</summary>
     /// <param name="auth">Twitch auth supplying tokens and client/device ids.</param>
-    /// <param name="integrity">Supplies the Client-Integrity token the watch mutation needs to be credited.</param>
     /// <param name="settings">Settings store used to build the HTTP handler.</param>
     /// <param name="bus">Event bus used to publish warning logs.</param>
-    public GqlClient(ITwitchAuth auth, IIntegrityService integrity, ISettingsStore settings, IHarvesterEventBus bus)
+    public GqlClient(ITwitchAuth auth, ISettingsStore settings, IHarvesterEventBus bus)
     {
         _auth = auth;
-        _integrity = integrity;
         _bus = bus;
         _http = new HttpClient(HttpClientBuilder.CreateHandler(settings));
     }
@@ -102,7 +81,7 @@ public sealed class GqlClient : IGqlClient, IDisposable
                 persistedQuery = new { version = TwitchConstants.Gql.Version, sha256Hash },
             },
         };
-        return SendAsync(payload, operationName, withIntegrity: false, ct);
+        return SendAsync(payload, operationName, ct);
     }
 
     /// <summary>Builds the raw-query request payload and sends it.</summary>
@@ -117,52 +96,17 @@ public sealed class GqlClient : IGqlClient, IDisposable
             ["query"] = query,
             ["variables"] = variables,
         };
-        return SendAsync(payload, "watch", withIntegrity: true, ct);
-    }
-
-    /// <summary>Debug-only: POST a raw query once and capture the full HTTP round-trip for inspection.</summary>
-    /// <param name="query">Raw GraphQL query text.</param>
-    /// <param name="variables">Query variables.</param>
-    /// <param name="ct">Token to cancel the request.</param>
-    /// <returns>The status code, raw body, and redacted sent headers.</returns>
-    public async Task<GqlProbeResult> ProbeRawAsync(string query, object variables, CancellationToken ct = default)
-    {
-        var payload = new Dictionary<string, object?> { ["query"] = query, ["variables"] = variables };
-        var json = JsonSerializer.Serialize(payload, JsonOpts);
-        var integrity = await _integrity.GetAsync(ct).ConfigureAwait(false);
-        using var req = new HttpRequestMessage(HttpMethod.Post, TwitchConstants.GqlUrl)
-        {
-            Content = new StringContent(json, Encoding.UTF8, "application/json"),
-        };
-        ApplyHeaders(req, integrity?.ClientId, integrity?.DeviceId);
-        if (integrity is not null)
-            req.Headers.TryAddWithoutValidation("Client-Integrity", integrity.Token);
-
-        var sent = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var h in req.Headers)
-            sent[h.Key] = h.Key.Equals("Authorization", StringComparison.OrdinalIgnoreCase)
-                ? $"OAuth <redacted, {string.Concat(h.Value).Length - 6} chars>"
-                : h.Key.Equals("Client-Integrity", StringComparison.OrdinalIgnoreCase)
-                    ? $"<redacted, {string.Concat(h.Value).Length} chars>"
-                    : string.Join(", ", h.Value);
-
-        using var resp = await _http.SendAsync(req, ct).ConfigureAwait(false);
-        var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-        return new GqlProbeResult((int)resp.StatusCode, body, sent, json);
+        return SendAsync(payload, "raw", ct);
     }
 
     /// <summary>Posts the payload with bounded retry/backoff, mapping HTTP 401 to GqlAuthException.</summary>
     /// <param name="payload">Serializable GraphQL request body.</param>
     /// <param name="op">Operation label used in log messages.</param>
-    /// <param name="withIntegrity">Attach a Client-Integrity token (required for the watch to be credited).</param>
     /// <param name="ct">Token to cancel the request.</param>
     /// <returns>Cloned root JSON element of the successful response.</returns>
-    async Task<JsonElement> SendAsync(object payload, string op, bool withIntegrity, CancellationToken ct)
+    async Task<JsonElement> SendAsync(object payload, string op, CancellationToken ct)
     {
         var json = JsonSerializer.Serialize(payload, JsonOpts);
-        // Fetched once per send (cached across sends); the watch mutation is not credited without it.
-        // The integrity token dictates the Client-Id to send (a token is bound to its client-id).
-        var integrity = withIntegrity ? await _integrity.GetAsync(ct).ConfigureAwait(false) : null;
         for (var attempt = 1; ; attempt++)
         {
             try
@@ -171,9 +115,7 @@ public sealed class GqlClient : IGqlClient, IDisposable
                 {
                     Content = new StringContent(json, Encoding.UTF8, "application/json"),
                 };
-                ApplyHeaders(req, integrity?.ClientId, integrity?.DeviceId);
-                if (integrity is not null)
-                    req.Headers.TryAddWithoutValidation("Client-Integrity", integrity.Token);
+                ApplyHeaders(req);
 
                 using var resp = await _http.SendAsync(req, ct).ConfigureAwait(false);
                 if (resp.StatusCode == HttpStatusCode.Unauthorized)
@@ -234,30 +176,23 @@ public sealed class GqlClient : IGqlClient, IDisposable
 
     /// <summary>Adds the Twitch client, session, origin, and auth headers to the request.</summary>
     /// <param name="req">Request the headers are added to.</param>
-    /// <param name="clientIdOverride">Client-Id to send instead of the default Android one (the watch uses
-    /// the client-id its integrity token is bound to); null keeps the default.</param>
-    /// <param name="deviceIdOverride">X-Device-Id to send instead of the app's own (the watch uses the
-    /// device-id its integrity token is bound to); null keeps the app's device id.</param>
-    void ApplyHeaders(HttpRequestMessage req, string? clientIdOverride = null, string? deviceIdOverride = null)
+    void ApplyHeaders(HttpRequestMessage req)
     {
         var state = _auth.State;
-        // Default to the Android TV client id (the one the device token was issued for). The web client
-        // id triggers Twitch's Kasada integrity gate ("failed integrity check") which returns empty drop
-        // campaigns; the mobile/TV client bypasses it. The watch overrides this to the client-id its
-        // integrity token was minted for, so the token and client-id stay a matched pair.
+        // Use the Android TV client id (the one the device token was issued for). The web client id
+        // triggers Twitch's Kasada integrity gate ("failed integrity check") which returns empty drop
+        // campaigns; the mobile/TV client bypasses it.
         req.Headers.TryAddWithoutValidation("Accept", "*/*");
         req.Headers.TryAddWithoutValidation("Accept-Language", "en-US");
         req.Headers.TryAddWithoutValidation("Pragma", "no-cache");
         req.Headers.TryAddWithoutValidation("Cache-Control", "no-cache");
-        req.Headers.TryAddWithoutValidation("Client-Id", clientIdOverride ?? TwitchConstants.AndroidAppClientId);
+        req.Headers.TryAddWithoutValidation("Client-Id", TwitchConstants.AndroidAppClientId);
         req.Headers.TryAddWithoutValidation("User-Agent", TwitchConstants.AndroidUserAgent);
-        // Client-Session-Id ties minute-watched events to one watch session so drops are credited.
         req.Headers.TryAddWithoutValidation("Client-Session-Id", _sessionId);
         req.Headers.TryAddWithoutValidation("Origin", "https://www.twitch.tv");
         req.Headers.TryAddWithoutValidation("Referer", "https://www.twitch.tv");
-        var deviceId = string.IsNullOrEmpty(deviceIdOverride) ? state.DeviceId : deviceIdOverride;
-        if (!string.IsNullOrEmpty(deviceId))
-            req.Headers.TryAddWithoutValidation("X-Device-Id", deviceId);
+        if (!string.IsNullOrEmpty(state.DeviceId))
+            req.Headers.TryAddWithoutValidation("X-Device-Id", state.DeviceId);
         if (!string.IsNullOrEmpty(state.AccessToken))
             req.Headers.TryAddWithoutValidation("Authorization", $"OAuth {state.AccessToken}");
     }

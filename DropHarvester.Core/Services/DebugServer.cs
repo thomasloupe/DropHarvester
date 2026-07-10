@@ -3,7 +3,6 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using DropHarvester.Models.Events;
-using DropHarvester.Models.Twitch;
 using DropHarvester.Services.Twitch;
 
 namespace DropHarvester.Services;
@@ -35,7 +34,6 @@ public sealed class DebugServer : IDebugServer
     readonly IHarvesterOrchestrator _harvester;
     readonly IHarvesterEventBus _bus;
     readonly IInventoryService _inventory;
-    readonly IIntegrityService _integrity;
     readonly object _logLock = new();
     readonly LinkedList<string> _log = new();
     const int MaxLog = 2000;
@@ -50,13 +48,11 @@ public sealed class DebugServer : IDebugServer
     /// <param name="harvester">Orchestrator queried for the live debug snapshot.</param>
     /// <param name="bus">Event bus whose events feed the rolling log.</param>
     /// <param name="inventory">Inventory service used for the raw claim-history endpoint.</param>
-    /// <param name="integrity">Integrity service exposed via the /integrity debug endpoint.</param>
-    public DebugServer(IHarvesterOrchestrator harvester, IHarvesterEventBus bus, IInventoryService inventory, IIntegrityService integrity)
+    public DebugServer(IHarvesterOrchestrator harvester, IHarvesterEventBus bus, IInventoryService inventory)
     {
         _harvester = harvester;
         _bus = bus;
         _inventory = inventory;
-        _integrity = integrity;
         _bus.Event += OnEvent; // keep a rolling log regardless of whether the server is up
     }
 
@@ -182,8 +178,6 @@ public sealed class DebugServer : IDebugServer
                 "/harvest" => ("application/json", Harvest(query)),
                 "/watch-probe" => ("application/json", JsonSerializer.Serialize(await _harvester.DebugWatchProbeAsync(ct).ConfigureAwait(false), JsonOpts)),
                 "/authstate" => ("application/json", JsonSerializer.Serialize(_harvester.DebugAuthState(), JsonOpts)),
-                "/integrity" => ("application/json", JsonSerializer.Serialize(_integrity.DebugState(), JsonOpts)),
-                "/set-integrity" => ("application/json", SetIntegrity(query)),
                 _ => ("text/plain", "Not found. Try / , /snapshot , /claims-raw , /watch-probe , /authstate , /harvest , /crashlog or /log"),
             };
         }
@@ -213,27 +207,6 @@ public sealed class DebugServer : IDebugServer
             CurrentOverride = _harvester.OverrideCampaignId,
             Targets = _harvester.DebugHarvestTargets(),
         }, JsonOpts);
-    }
-
-    /// <summary>Handles /set-integrity: injects an externally-obtained integrity token (testing hook) bound
-    /// to a client-id (client=web|android or a raw client-id), so a real Kasada-backed token can be tried.</summary>
-    /// <param name="query">Parsed query parameters (token, client, ttl).</param>
-    /// <returns>A JSON result confirming the injection or describing the missing input.</returns>
-    string SetIntegrity(Dictionary<string, string> query)
-    {
-        if (!query.TryGetValue("token", out var token) || string.IsNullOrWhiteSpace(token))
-            return JsonSerializer.Serialize(new { Error = "Provide ?token=<integrity>&client=web|android[&ttl=<minutes>]." }, JsonOpts);
-        var clientArg = query.TryGetValue("client", out var c) ? c : "web";
-        var clientId = clientArg.ToLowerInvariant() switch
-        {
-            "web" => TwitchConstants.WebClientId,
-            "android" => TwitchConstants.AndroidAppClientId,
-            _ => clientArg, // allow a raw client-id
-        };
-        var ttl = query.TryGetValue("ttl", out var t) && double.TryParse(t, out var m) ? m : 120;
-        var deviceId = query.TryGetValue("device", out var dv) ? dv : null;
-        _integrity.SetOverride(token, clientId, deviceId, ttl);
-        return JsonSerializer.Serialize(new { Result = $"Injected integrity token ({token.Length} chars) bound to client {clientId}, device {(string.IsNullOrEmpty(deviceId) ? "app" : "override")}, trusted {ttl:0}m." }, JsonOpts);
     }
 
     /// <summary>Parses a raw URL query string into a case-insensitive key/value map (URL-decoded).</summary>

@@ -2262,6 +2262,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             GeneratedUtc = now,
             IsRunning,
             Summary = _lastSummary,
+            WatchBeaconUrl = _watch.BeaconUrl,
             Active = new
             {
                 Channel = ActiveChannel?.DisplayName,

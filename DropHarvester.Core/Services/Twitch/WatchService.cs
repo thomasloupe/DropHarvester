@@ -17,6 +17,9 @@ namespace DropHarvester.Services.Twitch;
 /// </summary>
 public interface IWatchService
 {
+    /// <summary>The resolved beacon/spade endpoint the watch posts to, or null until first resolved.</summary>
+    string? BeaconUrl { get; }
+
     /// <summary>Send one minute-watched heartbeat for the channel. Returns true on HTTP 204 ack.</summary>
     /// <param name="channel">Channel to credit the watch minute to.</param>
     /// <param name="ct">Token to cancel the send.</param>
@@ -47,19 +50,19 @@ public sealed class WatchService : IWatchService
     static readonly Regex SettingsJsPattern =
         new("(https://(?:static\\.twitchcdn\\.net|assets\\.twitch\\.tv)/config/settings\\.[^\"'\\s]+\\.js)", RegexOptions.Compiled);
 
-    readonly IGqlClient _gql;
     readonly ITwitchAuth _auth;
     readonly HttpClient _http;
     readonly SemaphoreSlim _urlGate = new(1, 1);
     string? _beaconUrl; // resolved once, then reused for the session
 
-    /// <summary>Creates the watch service with its GraphQL client (debug probe), auth, and an HttpClient.</summary>
-    /// <param name="gql">GraphQL client used only by the debug probe now.</param>
+    /// <summary>The resolved beacon/spade endpoint the watch posts to, or null until first resolved.</summary>
+    public string? BeaconUrl => _beaconUrl;
+
+    /// <summary>Creates the watch service with auth and an HttpClient built from settings.</summary>
     /// <param name="auth">Twitch auth supplying the logged-in user id.</param>
     /// <param name="settings">Settings store used to build the HTTP handler (proxy etc.).</param>
-    public WatchService(IGqlClient gql, ITwitchAuth auth, ISettingsStore settings)
+    public WatchService(ITwitchAuth auth, ISettingsStore settings)
     {
-        _gql = gql;
         _auth = auth;
         _http = new HttpClient(HttpClientBuilder.CreateHandler(settings));
     }

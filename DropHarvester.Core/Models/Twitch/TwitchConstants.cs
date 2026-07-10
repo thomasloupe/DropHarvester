@@ -27,7 +27,6 @@ public static class TwitchConstants
     public const string ActivateUrl = "https://www.twitch.tv/activate";
 
     public const string GqlUrl = "https://gql.twitch.tv/gql";
-    public const string GqlIntegrityUrl = "https://gql.twitch.tv/integrity";
     public const string PubSubUrl = "wss://pubsub-edge.twitch.tv/v1";
 
     /// <summary>Login-code activation needs no scopes (empty string).</summary>
@@ -52,14 +51,6 @@ public static class TwitchConstants
         public const string ClaimCommunityPoints = "46aaeebe02c99afdf4fc97c7c0cba964124bf6b0af229395f1f6d1feed05b3d0";
         public const string PlaybackAccessToken = "ed230aa1e33e07eebb8928504583da78a5173989fadfb1ac94be06a04f3cdbe9";
     }
-
-    /// <summary>
-    /// The stream-less "watch" is a raw GraphQL mutation (not a persisted query) whose single
-    /// input is a base64(gzip(minified-json)) minute-watched event. Success == statusCode 204.
-    /// </summary>
-    public const string SendSpadeEventsMutation =
-        "\n mutation SendEvents($input: SendSpadeEventsInput!) "
-        + "{\n sendSpadeEvents(input: $input) {\n statusCode\n}\n}\n";
 
     // ----- Websocket sharding limits -----
     public const int MaxWebsockets = 8;
