@@ -136,9 +136,13 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
     // reward id -> windows of all campaigns granting it, to attribute a claim to the right campaign
     Dictionary<string, List<(DateTimeOffset start, DateTimeOffset end)>> _benefitWindows = new(StringComparer.OrdinalIgnoreCase);
     bool _claimHistoryLogged; // logged once to confirm award dates are present
-    // drops given up this session (no progress on ANY channel - precondition/eligibility/etc.)
-    readonly HashSet<string> _skipDrops = new();
+    // drops benched after giving up (id -> when to retry). Temporary so a run can't permanently drain its
+    // candidate pool to "waiting for a stream" and need a restart - benched drops come back on their own.
+    readonly Dictionary<string, DateTimeOffset> _skipDrops = new();
     const int GiveUpAfterMinutes = 15;
+    const int SkipRetryMinutes = 25; // how long a given-up drop stays benched before it's retried
+    // whether a drop is currently benched (its retry window hasn't passed yet)
+    bool IsSkipped(string dropId) => _skipDrops.TryGetValue(dropId, out var until) && DateTimeOffset.UtcNow < until;
     // no progress on the CURRENT channel this long = it isn't crediting us -> bench it, try another
     // (OPEN campaigns only). Kept above the ~1-2 min Twitch inventory can lag so we don't bench falsely.
     const int StallSwitchMinutes = 6;
@@ -558,11 +562,24 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             // send the minute-watched heartbeat (this advances the drop), then read progress back
             await SendWatchAsync(channel, ct).ConfigureAwait(false);
             await SyncInventorySafeAsync(ct).ConfigureAwait(false);
+
+            // Report which drop Twitch says this account is progressing on THIS channel right now
+            // (dropCurrentSession). This is the ground-truth "is it actually crediting" signal - a live
+            // allow-listed stream not airing drop-eligible content reports nothing. Log-only for now, so we
+            // can confirm the query returns real drop ids before letting it drive benching.
+            if (!string.IsNullOrEmpty(channel.Id))
+            {
+                var (sessionDropId, sessionMins) = await _inventory.FetchCurrentSessionAsync(channel.Id!, ct).ConfigureAwait(false);
+                Log(sessionDropId is null
+                    ? $"Credit check on {channel.DisplayName} [{campaign.Game.Name}]: Twitch reports NO drop crediting (target {drop.Id})."
+                    : $"Credit check on {channel.DisplayName} [{campaign.Game.Name}]: crediting drop {sessionDropId} at {sessionMins}m (target {drop.Id}).");
+            }
+
             _bus.Publish(new DropProgressEvent(drop));
             switch (CheckStall(drop))
             {
                 case StallAction.GiveUp:
-                    _skipDrops.Add(drop.Id);
+                    _skipDrops[drop.Id] = DateTimeOffset.UtcNow.AddMinutes(SkipRetryMinutes);
                     // a tier stalled at ZERO for the whole give-up window whose reward was already awarded
                     // within THIS campaign's window is almost certainly claimed with self permanently lagging
                     // at 0 (Marbles shared-reward case the uniqueness guard can't resolve). Persist it claimed
@@ -577,19 +594,17 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
                         Log($"No progress on '{drop.RewardName}' [{campaign.Game.Name}] after {GiveUpAfterMinutes} min across channels - skipping this drop for now.", HarvesterLogLevel.Warn);
                     return; // re-pick a target; this drop is now excluded this session
                 case StallAction.SwitchChannel:
-                    // An open campaign credits on any of the game's streams, and a channel-locked one credits
-                    // only on its allow-list - but in either case, if THIS channel hasn't credited for a while
-                    // (an esports co-stream not currently mirroring the match, say) bench it and pick another
-                    // eligible one rather than staying stuck. Only skip that when the campaign has a single
-                    // allowed channel, since there's nowhere else the drop can credit.
-                    if (campaign.AllowedChannels.Count != 1)
+                    // channel-specific drops can ONLY credit on this channel, so switching away is pointless
+                    // (and a mid-stream inventory lag can look like a stall while it's really crediting).
+                    // The fast-switch only helps OPEN campaigns; the cross-channel give-up still applies here.
+                    if (campaign.AllowedChannels.Count == 0)
                     {
                         _channelCooldownUntil[channel.Login] = DateTimeOffset.UtcNow.AddMinutes(ChannelCooldownMinutes);
                         // switching channels isn't progress: keep the stall banner
-                        Log($"No progress on '{drop.RewardName}' [{campaign.Game.Name}] via {channel.DisplayName} for {StallSwitchMinutes} min - it isn't crediting us, trying another eligible channel (or waiting if none are online).");
+                        Log($"No progress on '{drop.RewardName}' [{campaign.Game.Name}] via {channel.DisplayName} for {StallSwitchMinutes} min - it isn't crediting us, trying another live channel (or waiting if none are online).");
                         return;
                     }
-                    break; // single official channel: nowhere else to go, keep watching
+                    break; // official channel: keep watching (only place this drop can credit)
             }
 
             // claim across ALL campaigns each tick, not just the one being watched, so a drop that
@@ -641,8 +656,11 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
                     {
                         if (ReferenceEquals(c, campaign))
                             break; // reached the current campaign; nothing higher-priority is left
-                        var live = await _channels.FetchLiveChannelsForGameAsync(c.Game, 1, ct).ConfigureAwait(false);
-                        if (live.Any())
+                        // Switch only if this higher-priority campaign has a channel we can ACTUALLY watch
+                        // right now (an allow-listed one for a restricted campaign), using the same picker
+                        // the switch will use - so we never abandon the current watch for a game whose
+                        // campaign has nothing eligible live.
+                        if (await ChooseChannelAsync(c, ct).ConfigureAwait(false) is not null)
                         {
                             Log($"Higher-priority game available - switching from {campaign.Game.Name} to {c.Game.Name}.");
                             return;
@@ -1068,8 +1086,8 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             return "already claimed this campaign";
         if (DedupeEnabledFor(c) && pending.All(d => IsAlreadyOwned(d)))
             return "reward already owned (on your de-dupe list)";
-        if (pending.All(d => _skipDrops.Contains(d.Id)))
-            return "given up this session (no progress)";
+        if (pending.All(d => IsSkipped(d.Id)))
+            return "benched after no progress (retrying shortly)";
         if (!Settings.HarvestImpossibleDrops && pending.All(d => !CanFinishInTime(c, d)))
             return "not enough time left to finish before it ends (turn on 'Harvest impossible drops' to try anyway)";
         return "nothing left to harvest";
@@ -1097,7 +1115,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
                                            && !WeClaimedDrop(d)                   // this exact tier is in our ledger
                                            && !IsClaimedThisCampaign(d)          // claimed this run (self can lag)
                                            && (!dedupe || !IsAlreadyOwned(d))     // opt-in: skip owned rewards
-                                           && !_skipDrops.Contains(d.Id)
+                                           && !IsSkipped(d.Id)
                                            && (Settings.HarvestImpossibleDrops || CanFinishInTime(c, d)));
     }
 
@@ -2141,7 +2159,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
                     d.Name, d.RequiredMinutes, d.CurrentMinutes, d.IsClaimed, d.IsComplete,
                     ClaimedThisCampaign = IsClaimedThisCampaign(d),
                     LedgerClaimed = WeClaimedDrop(d), // per-tier ledger (survives self lag)
-                    GivenUp = _skipDrops.Contains(d.Id),
+                    GivenUp = IsSkipped(d.Id),
                     Benefits = d.Benefits.Select(b => new
                     {
                         b.Id, b.MatchKey, b.Name,
