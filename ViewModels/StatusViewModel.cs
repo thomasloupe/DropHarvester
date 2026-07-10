@@ -239,10 +239,12 @@ public partial class StatusViewModel : ObservableViewModel
     /// downloaded it (once downloaded, the "Update now" banner takes over).</summary>
     public bool UpdateAvailableVisible => UpdateAvailable && !UpdateReady;
 
+    string _downloadProgressText = ""; // " 45% (3.2 MB/s)" appended to the downloading line
+
     /// <summary>The "available" banner's detail line: the recommend-to-update message, or a downloading
-    /// note while the Download button is working.</summary>
+    /// note (with percent + speed) while the Download button is working.</summary>
     public string UpdateAvailableDetail => DownloadingUpdate
-        ? Loc.T("Status_UpdateDownloading", LatestVersion)
+        ? Loc.T("Status_UpdateDownloading", LatestVersion) + _downloadProgressText
         : Loc.T("Status_UpdateAvailableDetail", LatestVersion);
 
     /// <summary>Reflect whether a pending installer is already downloaded (e.g. fetched last session or
@@ -290,10 +292,17 @@ public partial class StatusViewModel : ObservableViewModel
             UpdateAvailable = false;
             return;
         }
+        _downloadProgressText = "";
         DownloadingUpdate = true;
         try
         {
-            var ok = await _update.DownloadAsync(info);
+            var progress = new Progress<UpdateProgress>(p =>
+            {
+                var speed = p.BytesPerSecond > 0 ? $" ({p.BytesPerSecond / (1024.0 * 1024.0):0.0} MB/s)" : "";
+                _downloadProgressText = $" {(int)(p.Fraction * 100)}%{speed}";
+                OnPropertyChanged(nameof(UpdateAvailableDetail));
+            });
+            var ok = await _update.DownloadAsync(info, progress);
             RefreshPendingUpdate();
             if (ok)
                 UpdateAvailable = false; // hand off to the "Update now" banner

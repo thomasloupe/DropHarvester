@@ -12,6 +12,9 @@ public sealed record UpdateInfo(
     string? DownloadUrl,
     string? Error = null);
 
+/// <summary>Download progress: completed fraction (0..1) and the current transfer rate in bytes/second.</summary>
+public readonly record struct UpdateProgress(double Fraction, double BytesPerSecond);
+
 /// <summary>
 /// GitHub-Releases updater backed by a real installer (Inno Setup .exe on Windows, .pkg on macOS).
 /// The check asks the GitHub API for the repo's latest published release; if its tag is newer than the
@@ -27,11 +30,12 @@ public interface IUpdateService
     Task<UpdateInfo> CheckAsync(CancellationToken ct = default);
 
     /// <summary>Download the installer for <paramref name="info"/> into the pending cache, ready to
-    /// apply. <paramref name="progress"/> reports 0..1. Returns true once fully downloaded.</summary>
+    /// apply. <paramref name="progress"/> reports the completed fraction and transfer rate. Returns true
+    /// once fully downloaded.</summary>
     /// <param name="info">The update whose installer should be downloaded.</param>
-    /// <param name="progress">Optional progress reporter receiving values from 0.0 to 1.0.</param>
+    /// <param name="progress">Optional progress reporter receiving fraction + bytes/second.</param>
     /// <param name="ct">Cancels the download.</param>
-    Task<bool> DownloadAsync(UpdateInfo info, IProgress<double>? progress = null, CancellationToken ct = default);
+    Task<bool> DownloadAsync(UpdateInfo info, IProgress<UpdateProgress>? progress = null, CancellationToken ct = default);
 
     /// <summary>Version of a downloaded, not-yet-applied installer newer than the running build (else null).</summary>
     string? PendingVersion { get; }
@@ -124,10 +128,10 @@ public sealed class UpdateService : IUpdateService
 
     /// <summary>Downloads the installer for the given update into the pending cache, retrying transient failures, and marks it pending.</summary>
     /// <param name="info">The update whose installer should be downloaded.</param>
-    /// <param name="progress">Optional progress reporter receiving values from 0.0 to 1.0.</param>
+    /// <param name="progress">Optional progress reporter receiving fraction + bytes/second.</param>
     /// <param name="ct">Cancels the download.</param>
     /// <returns>True once the installer is fully downloaded and recorded as pending.</returns>
-    public async Task<bool> DownloadAsync(UpdateInfo info, IProgress<double>? progress = null, CancellationToken ct = default)
+    public async Task<bool> DownloadAsync(UpdateInfo info, IProgress<UpdateProgress>? progress = null, CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(info.DownloadUrl) || string.IsNullOrEmpty(info.LatestVersion))
             return false;
@@ -159,16 +163,27 @@ public sealed class UpdateService : IUpdateService
                     await using (var fs = File.Create(tmp))
                     {
                         var buffer = new byte[81920];
-                        long read = 0;
+                        long read = 0, lastReportBytes = 0;
+                        var sw = Stopwatch.StartNew();
+                        var lastReport = TimeSpan.Zero;
                         int n;
                         while ((n = await src.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
                         {
                             await fs.WriteAsync(buffer.AsMemory(0, n), ct).ConfigureAwait(false);
                             read += n;
-                            if (total is > 0)
-                                progress?.Report(Math.Clamp((double)read / total.Value, 0, 1));
+                            // report ~4x/second: the completed fraction plus the rate over the last window
+                            var elapsed = sw.Elapsed;
+                            if (progress is not null && total is > 0 && (elapsed - lastReport).TotalMilliseconds >= 250)
+                            {
+                                var window = (elapsed - lastReport).TotalSeconds;
+                                var bps = window > 0 ? (read - lastReportBytes) / window : 0;
+                                progress.Report(new UpdateProgress(Math.Clamp((double)read / total.Value, 0, 1), bps));
+                                lastReport = elapsed;
+                                lastReportBytes = read;
+                            }
                         }
                     }
+                    progress?.Report(new UpdateProgress(1.0, 0));
                     break;
                 }
                 catch when (attempt < maxAttempts && !ct.IsCancellationRequested)
@@ -179,7 +194,7 @@ public sealed class UpdateService : IUpdateService
 
             if (File.Exists(target)) File.Delete(target);
             File.Move(tmp, target);
-            progress?.Report(1.0);
+            progress?.Report(new UpdateProgress(1.0, 0));
 
             // Mark it pending (written only after a complete download, so a pending entry is always
             // a full installer).

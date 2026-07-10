@@ -344,7 +344,12 @@ public partial class SettingsViewModel : ObservableViewModel
             else
             {
                 UpdateCheckStatus = Loc.T("Settings_DownloadingUpdate", info.LatestVersion);
-                var ok = await _update.DownloadAsync(info);
+                var progress = new Progress<UpdateProgress>(p =>
+                {
+                    var speed = p.BytesPerSecond > 0 ? $" ({p.BytesPerSecond / (1024.0 * 1024.0):0.0} MB/s)" : "";
+                    UpdateCheckStatus = $"{Loc.T("Settings_DownloadingUpdate", info.LatestVersion)} {(int)(p.Fraction * 100)}%{speed}";
+                });
+                var ok = await _update.DownloadAsync(info, progress);
                 RefreshPendingUpdate();
                 UpdateCheckStatus = ok
                     ? Loc.T("Settings_UpdateReadyAutoInstall", info.LatestVersion)
