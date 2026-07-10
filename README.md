@@ -5,9 +5,6 @@ drops **without downloading the stream** - it emulates "watching" by sending a
 minute-watched heartbeat, so it earns drops on near-zero bandwidth. Modern UI with
 a number of extra features.
 
-> **Note:** this automates Twitch's private API, which is against Twitch's Terms
-> of Service. It's a tool for personal use - use it at your own discretion.
-
 ## Screenshots
 
 | Status | Settings |
@@ -361,8 +358,3 @@ dotnet build DropHarvester.csproj -c Release -f net10.0-windows10.0.19041.0
 # macOS (Mac Catalyst)
 dotnet build DropHarvester.csproj -c Release -f net10.0-maccatalyst
 ```
-
-## Updating Twitch API constants
-
-If Twitch rotates a GraphQL persisted-query hash or a client id, everything is
-centralized in `Models/Twitch/TwitchConstants.cs` - update it there.
