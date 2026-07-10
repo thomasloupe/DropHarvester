@@ -137,6 +137,16 @@
                         <Label Grid.Row="2" Grid.Column="1" Text="{Binding ActiveCampaignName}" Style="{StaticResource Body}" />
                     </Grid>
 
+                    <!-- Watch the stream we're harvesting, in a browser. Extra top/bottom margin keeps it
+                         from crowding the campaign rows above and the progress below. -->
+                    <Button Text="{loc:Tr Status_WatchLive}"
+                            Style="{StaticResource GhostButton}"
+                            HorizontalOptions="Start"
+                            MinimumWidthRequest="150"
+                            Margin="0,8,0,8"
+                            Command="{Binding WatchLiveCommand}"
+                            IsVisible="{Binding CanWatchLive}" />
+
                     <!-- Campaign progress + time remaining -->
                     <Grid ColumnDefinitions="*,Auto">
                         <Label Text="{loc:Tr Status_CampaignProgress}" Style="{StaticResource Muted}" />

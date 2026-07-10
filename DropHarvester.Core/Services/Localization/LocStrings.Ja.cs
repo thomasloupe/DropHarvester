@@ -36,6 +36,7 @@ public static partial class LocStrings
         ["Status_Channel"] = "チャンネル",
         ["Status_Game"] = "ゲーム",
         ["Status_Campaign"] = "キャンペーン",
+        ["Status_WatchLive"] = "ライブを見る",
         ["Status_CampaignProgress"] = "キャンペーンの進捗",
         ["Status_UpNext"] = "次の予定",
         ["Status_Queue"] = "キュー",

@@ -37,6 +37,7 @@ public static partial class LocStrings
         ["Status_Channel"] = "Channel",
         ["Status_Game"] = "Game",
         ["Status_Campaign"] = "Campaign",
+        ["Status_WatchLive"] = "Watch Live",
         ["Status_CampaignProgress"] = "Campaign progress",
         ["Status_UpNext"] = "UP NEXT",
         ["Status_Queue"] = "QUEUE",

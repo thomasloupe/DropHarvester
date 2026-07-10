@@ -108,6 +108,9 @@ public partial class StatusViewModel : ObservableViewModel
     [ObservableProperty] private bool _harvestingActive;
     [ObservableProperty] private string _harvestingSummary = "Idle";
     [ObservableProperty] private string _activeChannelName = "-";
+    // login of the active channel, for the "Watch Live" button's twitch.tv URL
+    string? _activeChannelLogin;
+    [ObservableProperty] private bool _canWatchLive;
     [ObservableProperty] private string _activeGameName = "-";
     [ObservableProperty] private string _activeCampaignName = "-";
     [ObservableProperty] private double _campaignProgress;
@@ -316,6 +319,17 @@ public partial class StatusViewModel : ObservableViewModel
             UpdateStatus = "Couldn't start the installer - it'll auto-install on next restart.";
     }
 
+    /// <summary>Opens the active channel's Twitch page in the default browser so the user can watch the
+    /// stream they're harvesting.</summary>
+    [RelayCommand]
+    async Task WatchLiveAsync()
+    {
+        if (string.IsNullOrEmpty(_activeChannelLogin))
+            return;
+        try { await Launcher.Default.OpenAsync($"https://www.twitch.tv/{_activeChannelLogin}"); }
+        catch { /* no browser / user cancelled */ }
+    }
+
     public string StartPauseText => HarvestingActive
         ? Loc.T("Status_PauseHarvesting")
         : Loc.T("Status_StartHarvesting");
@@ -397,6 +411,8 @@ public partial class StatusViewModel : ObservableViewModel
         HarvestingActive = false;
         HarvestingSummary = Loc.T("Status_Idle");
         ActiveChannelName = "-";
+        _activeChannelLogin = null;
+        CanWatchLive = false;
         ActiveDropName = "-";
         ActiveDropProgress = 0;
         ActiveDropProgressText = "";
@@ -427,6 +443,7 @@ public partial class StatusViewModel : ObservableViewModel
                 {
                     ConnectionIssueVisible = false;
                     _activeDrop = null; _activeCampaign = null;
+                    _activeChannelLogin = null; CanWatchLive = false;
                     ActiveDropRemainingText = ""; CampaignRemainingText = "";
                     NextUpVisible = false; NextUpDrops.Clear(); NextUpCampaignId = null;
                     Queue.Clear(); QueueVisible = false; OverrideActive = false;
@@ -457,6 +474,8 @@ public partial class StatusViewModel : ObservableViewModel
 
             case ActiveTargetEvent t:
                 ActiveChannelName = t.Channel?.DisplayName ?? "-";
+                _activeChannelLogin = t.Channel?.Login;
+                CanWatchLive = !string.IsNullOrEmpty(_activeChannelLogin);
                 ActiveGameName = t.Campaign?.Game.Name ?? "-";
                 ActiveCampaignName = t.Campaign?.Name ?? "-";
                 _activeCampaign = t.Campaign;

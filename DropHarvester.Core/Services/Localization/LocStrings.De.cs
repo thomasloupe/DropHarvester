@@ -36,6 +36,7 @@ public static partial class LocStrings
         ["Status_Channel"] = "Kanal",
         ["Status_Game"] = "Spiel",
         ["Status_Campaign"] = "Kampagne",
+        ["Status_WatchLive"] = "Live ansehen",
         ["Status_CampaignProgress"] = "Kampagnenfortschritt",
         ["Status_UpNext"] = "ALS NÄCHSTES",
         ["Status_Queue"] = "WARTESCHLANGE",

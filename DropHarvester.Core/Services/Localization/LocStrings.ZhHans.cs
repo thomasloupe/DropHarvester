@@ -36,6 +36,7 @@ public static partial class LocStrings
         ["Status_Channel"] = "频道",
         ["Status_Game"] = "游戏",
         ["Status_Campaign"] = "活动",
+        ["Status_WatchLive"] = "观看直播",
         ["Status_CampaignProgress"] = "活动进度",
         ["Status_UpNext"] = "接下来",
         ["Status_Queue"] = "队列",
