@@ -36,10 +36,8 @@ public partial class TimedDrop : ObservableModel
     /// Set by the orchestrator; cleared when harvesting moves on.</summary>
     [ObservableProperty] private bool _isActivelyWatched;
 
-    // Anchor for the smooth per-second countdown: the wall-clock time plus the remaining-seconds captured
-    // then. Held steady across routine whole-minute updates so the countdown ticks continuously.
+    // Wall-clock stamp of the last watch-minute update, used to interpolate the sub-minute countdown.
     DateTimeOffset _watchAnchorUtc = DateTimeOffset.UtcNow;
-    int _anchorRemainingSec = -1;
 
     public int CurrentMinutes => Math.Min(RealCurrentMinutes + ExtraCurrentMinutes, RequiredMinutes);
 
@@ -67,17 +65,17 @@ public partial class TimedDrop : ObservableModel
     public int RemainingMinutes => Math.Max(0, RequiredMinutes - CurrentMinutes);
 
     /// <summary>Watch-time still needed, in seconds. While actively watched it interpolates down from the
-    /// countdown anchor so it ticks every second, held within a minute of the server's whole-minute
-    /// figure.</summary>
+    /// last whole-minute update so it ticks every second; the interpolation runs a little past a minute so
+    /// a late credit keeps the seconds moving, and it caps so a stall can't run it away.</summary>
     public int RemainingSeconds
     {
         get
         {
             var trueSec = RemainingMinutes * 60;
-            if (!IsActivelyWatched || IsClaimed || IsComplete || _anchorRemainingSec < 0)
+            if (!IsActivelyWatched || IsClaimed || IsComplete)
                 return trueSec;
-            var s = _anchorRemainingSec - (int)(DateTimeOffset.UtcNow - _watchAnchorUtc).TotalSeconds;
-            return Math.Clamp(s, Math.Max(0, trueSec - 90), trueSec);
+            var elapsed = (DateTimeOffset.UtcNow - _watchAnchorUtc).TotalSeconds;
+            return Math.Max(0, trueSec - (int)Math.Min(elapsed, 75));
         }
     }
 
@@ -113,12 +111,12 @@ public partial class TimedDrop : ObservableModel
     /// <summary>Reward name (falls back to the drop name).</summary>
     public string RewardName => Benefits.FirstOrDefault()?.Name ?? Name;
 
-    /// <summary>Re-sync the countdown anchor if it drifted and refresh derived properties when the authoritative watch-minutes change.</summary>
+    /// <summary>Reset the sub-minute countdown anchor and refresh derived properties when the authoritative watch-minutes change.</summary>
     /// <param name="value">The new authoritative watch-minute count.</param>
-    partial void OnRealCurrentMinutesChanged(int value) { ResyncCountdownIfDrifted(); RaiseDerived(); }
-    /// <summary>Re-sync the countdown anchor if it drifted and refresh derived properties when the local estimated minutes change.</summary>
+    partial void OnRealCurrentMinutesChanged(int value) { _watchAnchorUtc = DateTimeOffset.UtcNow; RaiseDerived(); }
+    /// <summary>Reset the sub-minute countdown anchor and refresh derived properties when the local estimated minutes change.</summary>
     /// <param name="value">The new locally estimated extra-minute count.</param>
-    partial void OnExtraCurrentMinutesChanged(int value) { ResyncCountdownIfDrifted(); RaiseDerived(); }
+    partial void OnExtraCurrentMinutesChanged(int value) { _watchAnchorUtc = DateTimeOffset.UtcNow; RaiseDerived(); }
     /// <summary>Refresh derived properties and the NotClaimed flag when the claimed state changes.</summary>
     /// <param name="value">True once the drop has been claimed.</param>
     partial void OnIsClaimedChanged(bool value)
@@ -129,31 +127,12 @@ public partial class TimedDrop : ObservableModel
     /// <summary>Re-raise CanClaim when the earned-instance claim id changes.</summary>
     /// <param name="value">The new claim id, or null when none.</param>
     partial void OnClaimIdChanged(string? value) => OnPropertyChanged(nameof(CanClaim));
-    /// <summary>Anchor and kick the live countdown when this drop starts being actively watched.</summary>
+    /// <summary>Reset the countdown anchor and kick the live countdown when this drop starts being actively watched.</summary>
     /// <param name="value">True while this drop is the actively-harvested target.</param>
     partial void OnIsActivelyWatchedChanged(bool value)
     {
-        if (value) AnchorCountdown();
-        Tick();
-    }
-
-    /// <summary>Set the countdown anchor to now with the current whole-minute remaining.</summary>
-    void AnchorCountdown()
-    {
         _watchAnchorUtc = DateTimeOffset.UtcNow;
-        _anchorRemainingSec = RemainingMinutes * 60;
-    }
-
-    /// <summary>Re-anchor the countdown only when the interpolated value has drifted outside a minute of
-    /// the server's whole-minute figure (progress jumped, or stalled long enough to run the countdown
-    /// ahead). Routine per-minute updates leave the anchor alone so the countdown stays smooth.</summary>
-    void ResyncCountdownIfDrifted()
-    {
-        var trueSec = RemainingMinutes * 60;
-        if (_anchorRemainingSec < 0) { AnchorCountdown(); return; }
-        var s = _anchorRemainingSec - (int)(DateTimeOffset.UtcNow - _watchAnchorUtc).TotalSeconds;
-        if (s > trueSec || s < trueSec - 90)
-            AnchorCountdown();
+        Tick();
     }
 
     /// <summary>Re-raise change notifications for every property derived from the watch-minute fields.</summary>

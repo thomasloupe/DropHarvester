@@ -577,17 +577,19 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
                         Log($"No progress on '{drop.RewardName}' [{campaign.Game.Name}] after {GiveUpAfterMinutes} min across channels - skipping this drop for now.", HarvesterLogLevel.Warn);
                     return; // re-pick a target; this drop is now excluded this session
                 case StallAction.SwitchChannel:
-                    // channel-specific drops can ONLY credit on this channel, so switching away is pointless
-                    // (and a mid-stream inventory lag can look like a stall while it's really crediting).
-                    // The fast-switch only helps OPEN campaigns; the cross-channel give-up still applies here.
-                    if (campaign.AllowedChannels.Count == 0)
+                    // An open campaign credits on any of the game's streams, and a channel-locked one credits
+                    // only on its allow-list - but in either case, if THIS channel hasn't credited for a while
+                    // (an esports co-stream not currently mirroring the match, say) bench it and pick another
+                    // eligible one rather than staying stuck. Only skip that when the campaign has a single
+                    // allowed channel, since there's nowhere else the drop can credit.
+                    if (campaign.AllowedChannels.Count != 1)
                     {
                         _channelCooldownUntil[channel.Login] = DateTimeOffset.UtcNow.AddMinutes(ChannelCooldownMinutes);
                         // switching channels isn't progress: keep the stall banner
-                        Log($"No progress on '{drop.RewardName}' [{campaign.Game.Name}] via {channel.DisplayName} for {StallSwitchMinutes} min - it isn't crediting us, trying another live channel (or waiting if none are online).");
+                        Log($"No progress on '{drop.RewardName}' [{campaign.Game.Name}] via {channel.DisplayName} for {StallSwitchMinutes} min - it isn't crediting us, trying another eligible channel (or waiting if none are online).");
                         return;
                     }
-                    break; // official channel: keep watching (only place this drop can credit)
+                    break; // single official channel: nowhere else to go, keep watching
             }
 
             // claim across ALL campaigns each tick, not just the one being watched, so a drop that
