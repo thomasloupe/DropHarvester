@@ -197,6 +197,7 @@ public static partial class LocStrings
         ["Status_NotLoggedIn"] = "ログインしていません",
         ["Status_LoggedInAs"] = "{0} としてログイン中 (id {1})",
         ["Status_ConnectionIssue"] = "Twitch Drops に問題が発生しているか、接続が失われました。接続が再確立され次第、自動で収集を再開します。",
+        ["Status_DropsOutage"] = "現在、Twitch は視聴を受け付けていますが、ドロップの進行が加算されていません（Twitch 側の障害）。収集は継続しており、復旧すると自動で再開します。",
         ["Login_Requesting"] = "Twitch にログインコードを要求しています...",
         ["Login_GoToAndEnter"] = "{0} にアクセスしてコード {1} を入力してください",
         ["Login_NotCompleted"] = "ログインが完了しませんでした。もう一度お試しください。",

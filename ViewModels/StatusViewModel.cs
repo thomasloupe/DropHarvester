@@ -192,6 +192,11 @@ public partial class StatusViewModel : ObservableViewModel
     [ObservableProperty] private bool _connectionIssueVisible;
     public string ConnectionIssueText => Loc.T("Status_ConnectionIssue");
 
+    // Watches are being acked but nothing is crediting (a Twitch-side drops outage). Distinct from the
+    // connection banner (which is for the heartbeat failing outright); harvesting keeps running.
+    [ObservableProperty] private bool _dropsOutageVisible;
+    public string DropsOutageText => Loc.T("Status_DropsOutage");
+
     // A newer GitHub release surfaces two ways: an "available" banner (checked, not yet downloaded) with a
     // Download button, and - once downloaded - the "ready" banner with Update now. On the next launch a
     // downloaded-but-unapplied update auto-installs.
@@ -451,6 +456,7 @@ public partial class StatusViewModel : ObservableViewModel
                 if (!m.Active)
                 {
                     ConnectionIssueVisible = false;
+                    DropsOutageVisible = false;
                     _activeDrop = null; _activeCampaign = null;
                     _activeChannelLogin = null; CanWatchLive = false;
                     ActiveDropRemainingText = ""; CampaignRemainingText = "";
@@ -479,6 +485,10 @@ public partial class StatusViewModel : ObservableViewModel
 
             case ConnectionIssueEvent ci:
                 ConnectionIssueVisible = ci.HasIssue;
+                break;
+
+            case DropsOutageEvent o:
+                DropsOutageVisible = o.Active;
                 break;
 
             case ActiveTargetEvent t:

@@ -187,6 +187,12 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
     int _stallMinutes;
     int _dropStallMinutes;
     string? _stallDropId;
+    // When NOTHING credits across channels for this long while actively watching online streams, it's a
+    // Twitch-side drops outage (watches are 204-acked but not credited), not a per-drop issue - surface a
+    // calm banner and keep running so it resumes the instant Twitch restores crediting.
+    const int OutageAfterMinutes = 12;
+    DateTimeOffset _lastCreditUtc = DateTimeOffset.UtcNow; // last time ANY watched drop advanced
+    bool _outageActive;
 
     /// <summary>What to do about a drop that isn't advancing: keep going, switch channel, or give up.</summary>
     enum StallAction { None, SwitchChannel, GiveUp }
@@ -260,6 +266,8 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
         _skipDrops.Clear(); // retry any previously given-up drops on a fresh run
         _channelCooldownUntil.Clear();
         _skipReasonLogged.Clear();
+        _lastCreditUtc = DateTimeOffset.UtcNow; // don't inherit a stale "no credit" clock across restarts
+        ClearOutage();
         _cts = new CancellationTokenSource();
         _loop = Task.Run(() => RunAsync(_cts.Token));
         Log(Loc.T("Log_HarvestingStarted"));
@@ -276,6 +284,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
         try { _cts?.Cancel(); } catch { }
         try { if (_loop is not null) await _loop.ConfigureAwait(false); } catch { }
         await _ws.StopAsync().ConfigureAwait(false);
+        ClearOutage();
         SetActive(null, null, null, Loc.T("Status_Stopped"));
         _bus.Publish(new HarvestingStateEvent(false, Loc.T("Status_Stopped")));
         Log(Loc.T("Log_HarvestingStopped"));
@@ -689,6 +698,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             }
 
             _bus.Publish(new DropProgressEvent(drop));
+            EvaluateOutage(channel);
             switch (CheckStall(drop))
             {
                 case StallAction.GiveUp:
@@ -816,6 +826,8 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             _lastDropMinutes = mins;
             _stallMinutes = 0;
             _dropStallMinutes = 0;
+            _lastCreditUtc = DateTimeOffset.UtcNow; // a real credit landed
+            ClearOutage();
             return StallAction.None;
         }
 
@@ -836,6 +848,31 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
         // cross-drop tally + the global no-progress timer/banner are LEFT ALONE so they survive a channel
         // switch - switching channels isn't progress
         _stallMinutes = 0;
+    }
+
+    /// <summary>Raise the "Twitch drops outage" banner once nothing has credited across channels for the
+    /// outage window while actively watching an online stream. Kept until a real credit clears it; the
+    /// harvester keeps running throughout so it resumes the moment Twitch restores crediting.</summary>
+    /// <param name="channel">The channel currently being watched.</param>
+    void EvaluateOutage(TwitchChannel channel)
+    {
+        if (!channel.Online || _outageActive)
+            return;
+        if (DateTimeOffset.UtcNow - _lastCreditUtc < TimeSpan.FromMinutes(OutageAfterMinutes))
+            return;
+        _outageActive = true;
+        _bus.Publish(new DropsOutageEvent(true));
+        Log($"Nothing has credited for {OutageAfterMinutes}+ min across channels though watches are being accepted - Twitch drop crediting looks down. Still running; it will resume automatically when Twitch restores it.", HarvesterLogLevel.Warn);
+    }
+
+    /// <summary>Clear the drops-outage banner (called when a real credit lands or harvesting stops).</summary>
+    void ClearOutage()
+    {
+        if (!_outageActive)
+            return;
+        _outageActive = false;
+        _bus.Publish(new DropsOutageEvent(false));
+        Log("Drop crediting resumed.");
     }
 
     /// <summary>Whether a channel (by login) is currently benched from selection.</summary>

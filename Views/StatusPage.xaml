@@ -114,6 +114,17 @@
                 </Grid>
             </Border>
 
+            <!-- ===== Drops-outage banner: watches acked but nothing credits (Twitch-side); keeps running ===== -->
+            <Border IsVisible="{Binding DropsOutageVisible}"
+                    BackgroundColor="#14263A" Stroke="#3D8FE5" StrokeThickness="1"
+                    StrokeShape="RoundRectangle 8" Padding="14,10">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                    <Label Text="&#x2139;" TextColor="#6BB6F5" FontSize="18" VerticalOptions="Center" />
+                    <Label Grid.Column="1" Text="{Binding DropsOutageText}" TextColor="#BCD8F0"
+                           VerticalOptions="Center" />
+                </Grid>
+            </Border>
+
             <!-- ===== Harvesting status ===== -->
             <Border Style="{StaticResource Card}" IsVisible="{Binding IsLoggedIn}">
                 <VerticalStackLayout Spacing="12">

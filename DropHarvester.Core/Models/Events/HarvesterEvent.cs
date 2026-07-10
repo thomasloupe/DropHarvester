@@ -73,3 +73,8 @@ public sealed record HarvesterErrorEvent(string Message) : HarvesterEvent;
 /// <summary>Twitch Drops appear to be down / the connection was lost (HasIssue=true), or it has
 /// recovered (HasIssue=false). Harvesting pauses/idles while true and resumes automatically when it clears.</summary>
 public sealed record ConnectionIssueEvent(bool HasIssue) : HarvesterEvent;
+
+/// <summary>Watches are being acknowledged but nothing is crediting across channels (Active=true), i.e. a
+/// Twitch-side drops outage, or crediting has resumed (Active=false). Harvesting keeps running the whole
+/// time so it picks back up the instant Twitch restores crediting.</summary>
+public sealed record DropsOutageEvent(bool Active) : HarvesterEvent;

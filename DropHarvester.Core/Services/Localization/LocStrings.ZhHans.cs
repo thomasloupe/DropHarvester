@@ -197,6 +197,7 @@ public static partial class LocStrings
         ["Status_NotLoggedIn"] = "未登录",
         ["Status_LoggedInAs"] = "已登录为 {0}（id {1}）",
         ["Status_ConnectionIssue"] = "Twitch Drops 出现问题或你已失去连接。连接重新建立后我们将自动恢复收取。",
+        ["Status_DropsOutage"] = "Twitch 目前接受观看，但不再累计掉宝进度（Twitch 服务端故障）。收取会持续运行，恢复后将自动继续。",
         ["Login_Requesting"] = "正在向 Twitch 请求登录代码...",
         ["Login_GoToAndEnter"] = "前往 {0} 并输入代码 {1}",
         ["Login_NotCompleted"] = "登录未完成。请重试。",

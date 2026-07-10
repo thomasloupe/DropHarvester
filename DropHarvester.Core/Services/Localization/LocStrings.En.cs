@@ -198,6 +198,7 @@ public static partial class LocStrings
         ["Status_NotLoggedIn"] = "Not logged in",
         ["Status_LoggedInAs"] = "Logged in as {0} (id {1})",
         ["Status_ConnectionIssue"] = "Twitch Drops are experiencing issues or you've lost connection. We'll automatically resume harvesting once connection has been re-established.",
+        ["Status_DropsOutage"] = "Twitch is accepting watches but not crediting drop progress right now (a Twitch-side outage). Harvesting keeps running and will pick back up automatically once it's fixed.",
         ["Login_Requesting"] = "Requesting a login code from Twitch...",
         ["Login_GoToAndEnter"] = "Go to {0} and enter code {1}",
         ["Login_NotCompleted"] = "Login was not completed. Please try again.",

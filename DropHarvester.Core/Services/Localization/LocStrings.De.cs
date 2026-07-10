@@ -197,6 +197,7 @@ public static partial class LocStrings
         ["Status_NotLoggedIn"] = "Nicht angemeldet",
         ["Status_LoggedInAs"] = "Angemeldet als {0} (ID {1})",
         ["Status_ConnectionIssue"] = "Twitch Drops haben Probleme oder du hast die Verbindung verloren. Wir setzen die Ernte automatisch fort, sobald die Verbindung wiederhergestellt ist.",
+        ["Status_DropsOutage"] = "Twitch akzeptiert die Wiedergabe, schreibt aber derzeit keinen Drop-Fortschritt gut (eine Störung auf Twitch-Seite). Die Ernte läuft weiter und wird automatisch fortgesetzt, sobald es behoben ist.",
         ["Login_Requesting"] = "Fordere einen Anmeldecode von Twitch an...",
         ["Login_GoToAndEnter"] = "Gehe zu {0} und gib den Code {1} ein",
         ["Login_NotCompleted"] = "Die Anmeldung wurde nicht abgeschlossen. Bitte versuche es erneut.",
