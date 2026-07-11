@@ -71,9 +71,13 @@ public partial class TimedDrop : ObservableModel
 
     public int CurrentMinutes => Math.Min(RealCurrentMinutes + ExtraCurrentMinutes, RequiredMinutes);
 
+    /// <summary>Minutes to SHOW on the bar/text: a claimed drop reads as fully watched even though Twitch
+    /// resets currentMinutesWatched to 0 once a drop is claimed - so the Finished view shows 100%, not 0%.</summary>
+    public int DisplayMinutes => IsClaimed ? RequiredMinutes : CurrentMinutes;
+
     public double Progress =>
         RequiredMinutes <= 0 ? (IsClaimed ? 1.0 : 0.0)
-        : Math.Clamp((double)CurrentMinutes / RequiredMinutes, 0.0, 1.0);
+        : Math.Clamp((double)DisplayMinutes / RequiredMinutes, 0.0, 1.0);
 
     public bool IsComplete => CurrentMinutes >= RequiredMinutes;
 
@@ -83,13 +87,13 @@ public partial class TimedDrop : ObservableModel
         && !IsClaimed
         && (Campaign?.EndsAt is not { } end || DateTimeOffset.UtcNow < end + TimeSpan.FromHours(24));
 
-    public string ProgressText => Loc.T("Model_DropProgress", CurrentMinutes, RequiredMinutes);
+    public string ProgressText => Loc.T("Model_DropProgress", DisplayMinutes, RequiredMinutes);
 
     /// <summary>Percent complete for this drop, e.g. "62.2%".</summary>
     public string PercentText => $"{Progress * 100:0.#}%";
 
     /// <summary>Percent + minutes, e.g. "62.2%  (182/360 min)" - shown on the drop cards.</summary>
-    public string ProgressSummary => Loc.T("Model_DropProgressSummary", PercentText, CurrentMinutes, RequiredMinutes);
+    public string ProgressSummary => Loc.T("Model_DropProgressSummary", PercentText, DisplayMinutes, RequiredMinutes);
 
     /// <summary>Watch-minutes still needed to complete this drop.</summary>
     public int RemainingMinutes => Math.Max(0, RequiredMinutes - CurrentMinutes);
