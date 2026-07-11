@@ -83,6 +83,7 @@ public partial class LogViewModel : ObservableViewModel
     {
         (string text, Color color)? line = e switch
         {
+            LogEvent { Level: HarvesterLogLevel.Debug } => null, // internal-only chatter: debug server keeps it, users don't see it
             LogEvent l => (l.Message, ColorForLevel(l.Level)),
             HarvesterErrorEvent err => (err.Message, ColorFor("DhRed")),
             LoginExpiredEvent => ("Login expired - please log in again.", ColorFor("DhGold")),

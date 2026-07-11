@@ -2,8 +2,9 @@ using DropHarvester.Models.Twitch;
 
 namespace DropHarvester.Models.Events;
 
-/// <summary>Severity of a log line emitted by the harvester.</summary>
-public enum HarvesterLogLevel { Info, Warn, Error }
+/// <summary>Severity of a log line emitted by the harvester. Debug is internal-only: it reaches the debug
+/// server's /log but is hidden from the in-app Log page so regular users aren't shown per-tick chatter.</summary>
+public enum HarvesterLogLevel { Info, Warn, Error, Debug }
 
 /// <summary>
 /// Strongly-typed events emitted by the harvesting engine. The UI, notifications, stats and webhook

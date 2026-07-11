@@ -725,9 +725,12 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             if (!string.IsNullOrEmpty(channel.Id))
             {
                 var (sessionDropId, sessionMins) = await _inventory.FetchCurrentSessionAsync(channel.Id!, ct).ConfigureAwait(false);
+                // Internal diagnostic only (dropCurrentSession is a stale/global value, not the real target) -
+                // Debug level so it stays in the debug server's /log but never spams the in-app Log.
                 Log(sessionDropId is null
                     ? $"Credit check on {channel.DisplayName} [{campaign.Game.Name}]: Twitch reports NO drop crediting (target {drop.Id})."
-                    : $"Credit check on {channel.DisplayName} [{campaign.Game.Name}]: crediting drop {sessionDropId} at {sessionMins}m (target {drop.Id}).");
+                    : $"Credit check on {channel.DisplayName} [{campaign.Game.Name}]: crediting drop {sessionDropId} at {sessionMins}m (target {drop.Id}).",
+                    HarvesterLogLevel.Debug);
             }
 
             _bus.Publish(new DropProgressEvent(drop));
@@ -945,7 +948,9 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
                 ReportConnection(true);
             else
             {
-                Log($"Connection to Twitch's GQL failed (watch heartbeat not acknowledged) - retrying in {TwitchConstants.WatchInterval.TotalSeconds:0}s.", HarvesterLogLevel.Warn);
+                // A single un-acked beacon heartbeat is a routine transient blip that the next tick retries;
+                // keep it out of the user-facing log (Debug). Sustained failure surfaces via ReportConnection.
+                Log($"Watch heartbeat not acknowledged - retrying in {TwitchConstants.WatchInterval.TotalSeconds:0}s.", HarvesterLogLevel.Debug);
                 ReportConnection(false);
             }
         }
@@ -958,7 +963,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
         }
         catch
         {
-            Log($"Connection to Twitch's GQL failed - retrying in {TwitchConstants.WatchInterval.TotalSeconds:0}s.", HarvesterLogLevel.Warn);
+            Log($"Watch heartbeat failed (transient) - retrying in {TwitchConstants.WatchInterval.TotalSeconds:0}s.", HarvesterLogLevel.Debug);
             ReportConnection(false); // next watch tick retries
         }
     }
@@ -1870,7 +1875,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             }
 
             HarvestableGames = orderedGameNames;
-            Log($"Getting channels for {orderedGameNames.Count} harvestable game(s)...");
+            Log($"Getting channels for {orderedGameNames.Count} harvestable game(s)...", HarvesterLogLevel.Debug);
 
             // 2. show the game groups IMMEDIATELY (just the active channel) so the tab is never blank
             //    while the per-game directory fetches run - even if a fetch is slow or hangs
@@ -1957,13 +1962,13 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             }
             _ = ResubscribeAsync(ct);
 
-            Log($"Channels ready: {orderedGameNames.Count} game(s), {byLogin.Values.Count(x => x.ch.Online)} live channel(s).");
+            Log($"Channels ready: {orderedGameNames.Count} game(s), {byLogin.Values.Count(x => x.ch.Online)} live channel(s).", HarvesterLogLevel.Debug);
             // diagnostics for the "0 live" report: note if the gather was cut short by the timeout and
             // which games returned no live channels
             if (processed < games.Count)
                 Log($"Channel gather stopped early: {processed}/{games.Count} games fetched before the 60s timeout - the rest will read 0 live until the next refresh.", HarvesterLogLevel.Warn);
             if (emptyGames.Count > 0)
-                Log($"No live channels returned for: {string.Join(", ", emptyGames.Take(25))}.");
+                Log($"No live channels returned for: {string.Join(", ", emptyGames.Take(25))}.", HarvesterLogLevel.Debug);
         }
         finally
         {
