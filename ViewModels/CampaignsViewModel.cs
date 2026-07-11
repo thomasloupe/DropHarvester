@@ -205,6 +205,8 @@ public partial class CampaignsViewModel : ObservableViewModel
     [ObservableProperty] private bool _showFinished;
     [ObservableProperty] private bool _showExcluded;
     [ObservableProperty] private bool _showDeduped;
+    // Opt-in: campaigns whose every reward requires a paid sub are hidden until this is checked.
+    [ObservableProperty] private bool _showSubOnly;
 
     /// <summary>Re-applies the filters when the ShowUpcoming toggle changes.</summary>
     /// <param name="value">the new toggle value.</param>
@@ -224,6 +226,9 @@ public partial class CampaignsViewModel : ObservableViewModel
     /// <summary>Re-applies the filters when the ShowDeduped toggle changes.</summary>
     /// <param name="value">the new toggle value.</param>
     partial void OnShowDedupedChanged(bool value) => ApplyFilters();
+    /// <summary>Re-applies the filters when the Sub-Only toggle changes.</summary>
+    /// <param name="value">the new toggle value.</param>
+    partial void OnShowSubOnlyChanged(bool value) => ApplyFilters();
 
     /// <summary>Called on first appearance; loads once if empty.</summary>
     public async Task EnsureLoadedAsync()
@@ -299,6 +304,11 @@ public partial class CampaignsViewModel : ObservableViewModel
 
         var view = _all.Where(c =>
         {
+            // Sub-only campaigns (nothing earnable by watching) live ONLY under the opt-in Sub-Only filter,
+            // so they don't clutter the normal view with rewards that cost money.
+            if (c.IsSubscriptionOnly)
+                return ShowSubOnly;
+
             // Each campaign is in exactly one bucket (Expired / Finished / Upcoming) and its checkbox
             // governs whether it shows. Finished means every reward is actually CLAIMED - a 100%-watched-
             // but-unclaimed campaign is still actionable and stays under Upcoming.

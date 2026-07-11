@@ -66,6 +66,7 @@ public static partial class LocStrings
         ["Campaigns_Finished"] = "Finished",
         ["Campaigns_Excluded"] = "Excluded",
         ["Campaigns_Deduped"] = "De-duped",
+        ["Campaigns_SubOnly"] = "Sub-Only",
         ["Campaigns_NoMatch"] = "No campaigns match the current filters.",
         ["Campaigns_Harvesting"] = "Harvesting",
         ["Campaigns_Claimed"] = "Claimed",

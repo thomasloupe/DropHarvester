@@ -65,6 +65,7 @@ public static partial class LocStrings
         ["Campaigns_Finished"] = "Завершённые",
         ["Campaigns_Excluded"] = "Исключённые",
         ["Campaigns_Deduped"] = "Без дублей",
+        ["Campaigns_SubOnly"] = "Только подписка",
         ["Campaigns_NoMatch"] = "Ни одна кампания не соответствует текущим фильтрам.",
         ["Campaigns_Harvesting"] = "Сбор",
         ["Campaigns_Claimed"] = "Получено",

@@ -65,6 +65,7 @@ public static partial class LocStrings
         ["Campaigns_Finished"] = "完了",
         ["Campaigns_Excluded"] = "除外済み",
         ["Campaigns_Deduped"] = "重複除去済み",
+        ["Campaigns_SubOnly"] = "サブスク限定",
         ["Campaigns_NoMatch"] = "現在のフィルターに一致するキャンペーンはありません。",
         ["Campaigns_Harvesting"] = "収集中",
         ["Campaigns_Claimed"] = "受取済み",

@@ -65,6 +65,7 @@ public static partial class LocStrings
         ["Campaigns_Finished"] = "已完成",
         ["Campaigns_Excluded"] = "已排除",
         ["Campaigns_Deduped"] = "已去重",
+        ["Campaigns_SubOnly"] = "仅订阅",
         ["Campaigns_NoMatch"] = "没有符合当前筛选条件的活动。",
         ["Campaigns_Harvesting"] = "收取中",
         ["Campaigns_Claimed"] = "已领取",

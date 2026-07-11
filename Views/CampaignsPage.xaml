@@ -45,6 +45,10 @@
                 <CheckBox IsChecked="{Binding ShowDeduped}" Color="{StaticResource DhAccent}" />
                 <Label Text="{loc:Tr Campaigns_Deduped}" Style="{StaticResource Body}" VerticalOptions="Center" />
             </HorizontalStackLayout>
+            <HorizontalStackLayout Spacing="4" Margin="0,0,16,4">
+                <CheckBox IsChecked="{Binding ShowSubOnly}" Color="{StaticResource DhAccent}" />
+                <Label Text="{loc:Tr Campaigns_SubOnly}" Style="{StaticResource Body}" VerticalOptions="Center" />
+            </HorizontalStackLayout>
         </FlexLayout>
 
         <Grid Grid.Row="2" ColumnDefinitions="Auto,*" ColumnSpacing="8">

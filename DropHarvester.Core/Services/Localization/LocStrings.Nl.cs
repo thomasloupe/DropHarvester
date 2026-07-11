@@ -65,6 +65,7 @@ public static partial class LocStrings
         ["Campaigns_Finished"] = "Voltooid",
         ["Campaigns_Excluded"] = "Uitgesloten",
         ["Campaigns_Deduped"] = "Ontdubbeld",
+        ["Campaigns_SubOnly"] = "Alleen abonnees",
         ["Campaigns_NoMatch"] = "Geen campagnes voldoen aan de huidige filters.",
         ["Campaigns_Harvesting"] = "Bezig met oogsten",
         ["Campaigns_Claimed"] = "Geclaimd",

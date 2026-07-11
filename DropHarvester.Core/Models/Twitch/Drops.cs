@@ -204,10 +204,11 @@ public partial class DropsCampaign : ObservableModel
     public IReadOnlyList<string> AllowedChannels { get; init; } = Array.Empty<string>();
 
     /// <summary>Where a "buy drop" link sends the user to subscribe: the first allow-listed channel's
-    /// subscribe page, or the campaign details page for open (any-channel) campaigns.</summary>
-    public string? SubscribeUrl => AllowedChannels.Count > 0
+    /// subscribe page, or the game's directory for open (any-channel) campaigns so they can pick a channel
+    /// to sub to. (The campaign's own detailsURL is often a generic help article, so it isn't used here.)</summary>
+    public string SubscribeUrl => AllowedChannels.Count > 0
         ? $"https://www.twitch.tv/subs/{AllowedChannels[0]}"
-        : DetailsUrl;
+        : Game.DirectoryUrl;
 
     public IReadOnlyList<TimedDrop> Drops { get; init; } = Array.Empty<TimedDrop>();
 
@@ -227,6 +228,10 @@ public partial class DropsCampaign : ObservableModel
 
     /// <summary>Whether any of this campaign's drops are subscription-gated (drives the "sub" badge).</summary>
     public bool RequiresSubscription => Drops.Any(d => d.RequiresSubscription);
+
+    /// <summary>Whether EVERY drop in this campaign is subscription-gated - i.e. nothing can be earned by
+    /// watching. These live under the opt-in "Sub-Only" filter so they don't clutter the normal view.</summary>
+    public bool IsSubscriptionOnly => Drops.Count > 0 && Drops.All(d => d.RequiresSubscription);
 
     public CampaignStatus Status
     {
