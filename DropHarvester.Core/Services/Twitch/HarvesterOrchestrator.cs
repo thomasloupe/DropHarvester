@@ -97,6 +97,13 @@ public interface IHarvesterOrchestrator
     /// <param name="campaignId">Id of the campaign to test.</param>
     bool IsCampaignFinished(string campaignId);
 
+    /// <summary>Whether every reward in this campaign has actually been CLAIMED per the harvester's ledger
+    /// (Twitch's own self.isClaimed, or our claim ledger when Twitch's self lags at 0/unclaimed). Unlike
+    /// <see cref="IsCampaignFinished"/> this does NOT count a merely 100%-watched-but-unclaimed drop, so the
+    /// Inventory's Finished filter can move a claimed campaign there without hiding one still awaiting a claim.</summary>
+    /// <param name="campaignId">Id of the campaign to test.</param>
+    bool AreAllRewardsClaimed(string campaignId);
+
     /// <summary>Whether the harvester has a drop in this campaign (by id) it would harvest RIGHT NOW (eligible,
     /// an unclaimed/unfinished/finishable drop). The Inventory's Finished filter uses this as a HARD
     /// override: a campaign the harvester would actively harvest can never be shown as finished - even if its
@@ -455,6 +462,16 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
     public bool IsCampaignFinished(string campaignId)
         => _campaigns.Any(c => string.Equals(c.Id, campaignId, StringComparison.OrdinalIgnoreCase)
                                && IsCampaignFinishedForHarvesting(c));
+
+    /// <summary>Whether every reward is CLAIMED per Twitch's self OR our ledger (not just watched to 100%).</summary>
+    /// <param name="campaignId">Id of the campaign to test.</param>
+    /// <returns>True when all drops are claimed (self or ledger); false otherwise or if unknown.</returns>
+    public bool AreAllRewardsClaimed(string campaignId)
+    {
+        var c = _campaigns.FirstOrDefault(x => string.Equals(x.Id, campaignId, StringComparison.OrdinalIgnoreCase));
+        return c is not null && c.Drops.Count > 0
+            && c.Drops.All(d => d.IsClaimed || IsClaimedThisCampaign(d) || WeClaimedDrop(d));
+    }
 
     /// <summary>Whether the harvester has a drop in the campaign (by id) it would harvest right now.</summary>
     /// <param name="campaignId">Id of the campaign to test.</param>

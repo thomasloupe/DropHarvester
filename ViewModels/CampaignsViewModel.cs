@@ -356,18 +356,12 @@ public partial class CampaignsViewModel : ObservableViewModel
             return CampaignBucket.Expired;
         // never file the campaign being harvested, or one the harvester would still harvest, under Finished - a
         // reused reward id owned from a past run (SMITE2 "Market Coins") must not mark a still-earnable
-        // campaign done
-        if (!IsHarvestingCampaign(c) && !_harvester.IsCampaignHarvestable(c.Id) && AllRewardsClaimed(c))
+        // campaign done. "All claimed" comes from the harvester's ledger, not just Twitch's self.isClaimed,
+        // which can lag at 0/unclaimed for minutes after we've actually claimed (the Albion case).
+        if (!IsHarvestingCampaign(c) && !_harvester.IsCampaignHarvestable(c.Id) && _harvester.AreAllRewardsClaimed(c.Id))
             return CampaignBucket.Finished;
         return CampaignBucket.Upcoming;
     }
-
-    /// <summary>Whether every drop's reward in the campaign has actually been CLAIMED - Twitch's per-drop
-    /// self says claimed, or our claim history attributes the reward to this campaign. A drop only watched
-    /// to 100% but not yet claimed does NOT count, so its campaign stays out of Finished.</summary>
-    /// <param name="c">the campaign to test.</param>
-    bool AllRewardsClaimed(DropsCampaign c)
-        => c.Drops.Count > 0 && c.Drops.All(d => d.IsClaimed || ClaimedThisRun(c, d));
 
     /// <summary>Whether this is the campaign the harvester is actively watching right now.</summary>
     /// <param name="c">the campaign to test.</param>
