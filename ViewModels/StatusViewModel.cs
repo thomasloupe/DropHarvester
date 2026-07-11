@@ -123,6 +123,7 @@ public partial class StatusViewModel : ObservableViewModel
 
     [ObservableProperty] private string _campaignRemainingText = "";
     [ObservableProperty] private string _activeDropRemainingText = "";
+    [ObservableProperty] private bool _activeDropRequiresSubscription;
 
     // "Up next" = the campaign the harvester will move to after the active one, plus its drops.
     [ObservableProperty] private bool _nextUpVisible;
@@ -584,6 +585,7 @@ public partial class StatusViewModel : ObservableViewModel
             ActiveDropProgressText = "";
             ActiveDropRemainingText = "";
             ActiveDropImageUrl = null;
+            ActiveDropRequiresSubscription = false;
             return;
         }
         ActiveDropName = drop.RewardName;
@@ -591,6 +593,7 @@ public partial class StatusViewModel : ObservableViewModel
         ActiveDropProgress = drop.Progress;
         ActiveDropProgressText = drop.ProgressSummary;
         ActiveDropImageUrl = drop.RewardImageUrl;
+        ActiveDropRequiresSubscription = drop.RequiresSubscription;
     }
 
     /// <summary>Handles auth changes by syncing login state on the UI thread.</summary>

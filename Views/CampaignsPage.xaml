@@ -78,6 +78,10 @@
                                         <Label Text="{Binding Name}" Style="{StaticResource Muted}" />
                                     </VerticalStackLayout>
                                     <HorizontalStackLayout Grid.Column="1" Spacing="10" VerticalOptions="Start">
+                                        <Border BackgroundColor="#9146FF" StrokeThickness="0" StrokeShape="RoundRectangle 4"
+                                                Padding="5,1" VerticalOptions="Center" IsVisible="{Binding RequiresSubscription}">
+                                            <Label Text="{loc:Tr Badge_Sub}" TextColor="White" FontSize="10" FontAttributes="Bold" />
+                                        </Border>
                                         <Label Text="{loc:Tr Campaigns_Harvesting}" TextColor="{StaticResource DhAccent}" FontAttributes="Bold"
                                                FontSize="12" VerticalOptions="Center" IsVisible="{Binding IsHarvesting}" />
                                         <Label FontAttributes="Bold" FontSize="12" VerticalOptions="Center"
@@ -113,11 +117,18 @@
                                                 </Border>
                                                 <Grid Grid.Column="1" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" RowDefinitions="Auto,Auto,Auto">
                                                     <Label Text="{Binding RewardName}" Style="{StaticResource Body}" FontSize="13" LineBreakMode="TailTruncation" />
-                                                    <Label Grid.Column="1" Text="{Binding ProgressSummary}" Style="{StaticResource Muted}" FontSize="12" />
+                                                    <Label Grid.Column="1" Text="{Binding ProgressSummary}" Style="{StaticResource Muted}" FontSize="12"
+                                                           IsVisible="{Binding NotSubOnlyReward}" />
                                                     <Label Grid.Column="2" Text="{loc:Tr Campaigns_Claimed}" TextColor="{StaticResource DhGreen}" FontSize="12"
                                                            IsVisible="{Binding IsClaimed}" />
                                                     <ProgressBar Grid.Row="1" Grid.ColumnSpan="3" Progress="{Binding Progress}"
-                                                                 ProgressColor="{StaticResource DhAccent}" Margin="0,3,0,0" />
+                                                                 ProgressColor="{StaticResource DhAccent}" Margin="0,3,0,0"
+                                                                 IsVisible="{Binding NotSubOnlyReward}" />
+                                                    <Button Grid.Row="1" Grid.ColumnSpan="3" Text="{loc:Tr Campaigns_BuyDrop}"
+                                                            IsVisible="{Binding IsSubOnlyReward}" HorizontalOptions="Start" Margin="0,3,0,0"
+                                                            Padding="12,2" FontSize="12" BackgroundColor="#9146FF" TextColor="White"
+                                                            Command="{Binding Source={x:Reference Root}, Path=BindingContext.BuyDropCommand}"
+                                                            CommandParameter="{Binding SubscribeUrl}" />
                                                     <Label Grid.Row="2" Grid.ColumnSpan="3" Text="{Binding RemainingText}"
                                                            Style="{StaticResource Muted}" FontSize="11" Margin="0,2,0,0"
                                                            IsVisible="{Binding HasRemaining}" />
@@ -143,9 +154,14 @@
                                                            HeightRequest="34" />
                                                     <Image Source="{Binding RewardImageUrl}" Aspect="AspectFit"
                                                            WidthRequest="88" HeightRequest="88" HorizontalOptions="Center" />
-                                                    <ProgressBar Progress="{Binding Progress}" ProgressColor="{StaticResource DhAccent}" />
+                                                    <ProgressBar Progress="{Binding Progress}" ProgressColor="{StaticResource DhAccent}"
+                                                                 IsVisible="{Binding NotSubOnlyReward}" />
                                                     <Label Text="{Binding PercentText}" Style="{StaticResource Muted}" FontSize="11"
-                                                           HorizontalTextAlignment="Center" IsVisible="{Binding NotClaimed}" />
+                                                           HorizontalTextAlignment="Center" IsVisible="{Binding NotSubOnlyReward}" />
+                                                    <Button Text="{loc:Tr Campaigns_BuyDrop}" IsVisible="{Binding IsSubOnlyReward}"
+                                                            Padding="8,2" FontSize="11" BackgroundColor="#9146FF" TextColor="White"
+                                                            Command="{Binding Source={x:Reference Root}, Path=BindingContext.BuyDropCommand}"
+                                                            CommandParameter="{Binding SubscribeUrl}" />
                                                     <Label Text="{Binding RemainingText}" Style="{StaticResource Muted}" FontSize="10"
                                                            HorizontalTextAlignment="Center" IsVisible="{Binding HasRemaining}" />
                                                     <Label Text="{loc:Tr Campaigns_ClaimedBadge}" TextColor="{StaticResource DhGreen}" FontSize="11" FontAttributes="Bold"

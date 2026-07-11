@@ -234,6 +234,7 @@ public sealed class InventoryService : IInventoryService
             EndsAt = camp.Date("endAt") ?? DateTimeOffset.UtcNow,
             ImageUrl = FixImageDims(camp.Str("imageURL")),
             LinkUrl = camp.Str("accountLinkURL"),
+            DetailsUrl = camp.Str("detailsURL"),
             AllowedChannels = allowed,
             Drops = drops,
             Linked = camp.Path("self")?.BoolOr("isAccountConnected") ?? false,
@@ -266,7 +267,7 @@ public sealed class InventoryService : IInventoryService
             ?? Enumerable.Empty<JsonElement>();
 
         // parse off the UI thread, but apply updates on it: these drops are UI-bound, so mutating them off-thread trips WinUI's cross-thread failfast (combase/CoreMessagingXP)
-        var updates = new List<(TimedDrop drop, int minutes, bool claimed, string? claimId)>();
+        var updates = new List<(TimedDrop drop, int minutes, bool claimed, string? claimId, int currentSubs)>();
         foreach (var camp in inProgress)
         {
             foreach (var d in camp.Items("timeBasedDrops"))
@@ -281,7 +282,8 @@ public sealed class InventoryService : IInventoryService
                     drop,
                     self.Value.IntOr("currentMinutesWatched"),
                     self.Value.BoolOr("isClaimed"),
-                    self.Value.Str("dropInstanceID")));
+                    self.Value.Str("dropInstanceID"),
+                    self.Value.IntOr("currentSubs")));
             }
         }
         if (updates.Count == 0)
@@ -289,11 +291,12 @@ public sealed class InventoryService : IInventoryService
 
         await UiDispatch.Current.InvokeAsync(() =>
         {
-            foreach (var (drop, minutes, claimed, claimId) in updates)
+            foreach (var (drop, minutes, claimed, claimId, currentSubs) in updates)
             {
                 drop.RealCurrentMinutes = minutes;
                 drop.ExtraCurrentMinutes = 0;
                 drop.IsClaimed = claimed;
+                drop.CurrentSubs = currentSubs;
                 if (!string.IsNullOrEmpty(claimId))
                     drop.ClaimId = claimId;
             }
@@ -480,6 +483,7 @@ public sealed class InventoryService : IInventoryService
         {
             drop.RealCurrentMinutes = self.Value.IntOr("currentMinutesWatched");
             drop.IsClaimed = self.Value.BoolOr("isClaimed");
+            drop.CurrentSubs = self.Value.IntOr("currentSubs");
             var claim = self.Value.Str("dropInstanceID");
             if (!string.IsNullOrEmpty(claim))
                 drop.ClaimId = claim;

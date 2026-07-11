@@ -143,6 +143,9 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
     // this (so a campaign released earlier that we merely discovered late never counts as "new")
     DateTimeOffset _overrideSetUtc = DateTimeOffset.MinValue;
     DateTimeOffset _lastCampaignFetch = DateTimeOffset.MinValue;
+    // Re-discover campaigns this often, even mid-harvest, so a newly-started campaign (e.g. a fresh
+    // higher-priority drop) is picked up promptly instead of only when the current campaign finishes.
+    const int RediscoverMinutes = 8;
     // harvesting loop's private snapshot: replaced (never mutated in place) so it can't be enumerated while
     // the UI-bound Campaigns collection is rebuilt on the UI thread ("Collection was modified")
     List<DropsCampaign> _campaigns = new();
@@ -760,6 +763,14 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
                 _lastPreemptCheck = DateTimeOffset.UtcNow;
                 QueueChannelRefresh(channel, ct); // keep the Channels tab fresh (background)
 
+                // Discovery is stale: return to the main loop so it re-fetches campaigns and re-picks. This
+                // is how a campaign that started AFTER we settled on the current one (a new higher-priority
+                // drop) gets picked up without waiting for this campaign to finish or a manual pause/resume.
+                // (A plain override stays pinned - only re-discover when not force-harvesting one campaign.)
+                if (_forcedCampaignId is null
+                    && DateTimeOffset.UtcNow - _lastCampaignFetch >= TimeSpan.FromMinutes(RediscoverMinutes))
+                    return;
+
                 if (_forcedCampaignId is not null)
                 {
                     // harvesting a fallback because the override target was offline? snap back the moment its
@@ -1184,8 +1195,8 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
     /// <param name="c">The campaign to test.</param>
     bool IsCampaignFinishedForHarvesting(DropsCampaign c)
         => c.Drops.Count > 0 && c.Drops.All(d => d.IsClaimed || d.IsComplete || IsClaimedThisCampaign(d) || WeClaimedDrop(d)
-                                                 // a sub-gated drop we're not harvesting doesn't keep the campaign "open"
-                                                 || (!Settings.HarvestSubDrops && d.RequiresSubscription));
+                                                 // a sub-gated drop we can't meet doesn't keep the campaign "open"
+                                                 || !d.SubRequirementMet);
 
     /// <summary>Log each skipped game's reason once (deduped by game within this pass, and again by
     /// (game, reason) across passes via <see cref="_skipReasonLogged"/>), so the log isn't spammed.</summary>
@@ -1267,7 +1278,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
                                            && !WeClaimedDrop(d)                   // this exact tier is in our ledger
                                            && !IsClaimedThisCampaign(d)          // claimed this run (self can lag)
                                            && (!dedupe || !IsAlreadyOwned(d))     // opt-in: skip owned rewards
-                                           && (Settings.HarvestSubDrops || !d.RequiresSubscription) // opt-in: sub-gated drops
+                                           && d.SubRequirementMet                 // skip sub-gated drops we don't hold the subs for
                                            && !IsSkipped(d.Id)
                                            && (Settings.HarvestImpossibleDrops || CanFinishInTime(c, d)));
     }
@@ -2076,7 +2087,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
     /// <param name="ct">Cancels the fetch on shutdown.</param>
     async Task EnsureCampaignsAsync(CancellationToken ct)
     {
-        if (DateTimeOffset.UtcNow - _lastCampaignFetch < TimeSpan.FromMinutes(20) && _campaigns.Count > 0)
+        if (DateTimeOffset.UtcNow - _lastCampaignFetch < TimeSpan.FromMinutes(RediscoverMinutes) && _campaigns.Count > 0)
             return;
 
         try
@@ -2311,7 +2322,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
                 Drops = c.Drops.OrderBy(d => d.RequiredMinutes).Select(d => new
                 {
                     d.Name, d.RequiredMinutes, d.CurrentMinutes, d.IsClaimed, d.IsComplete,
-                    d.RequiredSubs, d.RequiresSubscription,
+                    d.RequiredSubs, d.CurrentSubs, d.RequiresSubscription, d.SubRequirementMet,
                     ClaimedThisCampaign = IsClaimedThisCampaign(d),
                     LedgerClaimed = WeClaimedDrop(d), // per-tier ledger (survives self lag)
                     GivenUp = IsSkipped(d.Id),

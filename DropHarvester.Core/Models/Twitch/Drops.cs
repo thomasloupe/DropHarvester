@@ -17,11 +17,34 @@ public partial class TimedDrop : ObservableModel
     public IReadOnlyList<Benefit> Benefits { get; init; } = Array.Empty<Benefit>();
 
     /// <summary>Number of channel subscriptions Twitch requires to earn this drop (its <c>requiredSubs</c>).
-    /// Greater than zero means the drop is subscription-gated and can't be earned by watch time alone.</summary>
+    /// Greater than zero means the drop is subscription-gated.</summary>
     public int RequiredSubs { get; init; }
 
-    /// <summary>Whether this drop is subscription-gated (requires one or more subs to earn).</summary>
+    /// <summary>Subs the account currently holds toward this drop (Twitch's <c>self.currentSubs</c>); only
+    /// populated once the drop is in the inventory. Zero until then, so an un-held sub drop reads as unmet.</summary>
+    [ObservableProperty] private int _currentSubs;
+
+    /// <summary>Whether the account meets this drop's subscription requirement (or it needs none). A
+    /// sub-gated drop we don't hold the subs for can't be earned by watching, so it's skipped automatically
+    /// (no setting): Twitch reports <c>currentSubs &gt;= requiredSubs</c> only when we actually qualify.</summary>
+    public bool SubRequirementMet => RequiredSubs <= 0 || CurrentSubs >= RequiredSubs;
+
+    /// <summary>Whether this drop is subscription-gated at all (drives the "sub" badge in the UI).</summary>
     public bool RequiresSubscription => RequiredSubs > 0;
+
+    /// <summary>A drop earned purely by subscribing (subs required, no watch time). These can't be harvested,
+    /// so the UI shows a "buy drop" link instead of a progress bar.</summary>
+    public bool IsSubOnlyReward => RequiredSubs > 0 && RequiredMinutes <= 0;
+
+    /// <summary>Inverse of <see cref="IsSubOnlyReward"/> - true when the drop has a normal watch-time bar.</summary>
+    public bool NotSubOnlyReward => !IsSubOnlyReward;
+
+    /// <summary>The subscribe page to send the user to for a sub-only drop (the owning campaign's).</summary>
+    public string? SubscribeUrl => Campaign?.SubscribeUrl;
+
+    /// <summary>Re-raise the sub-eligibility flag when the held-sub count updates from inventory.</summary>
+    /// <param name="value">The new current-subs count.</param>
+    partial void OnCurrentSubsChanged(int value) => OnPropertyChanged(nameof(SubRequirementMet));
 
     /// <summary>Ids of drops that must be earned before this one becomes available.</summary>
     public IReadOnlyList<string> PreconditionDropIds { get; init; } = Array.Empty<string>();
@@ -173,8 +196,18 @@ public partial class DropsCampaign : ObservableModel
     public string? ImageUrl { get; init; }
     public string? LinkUrl { get; init; }
 
+    /// <summary>Twitch's own "how to earn this campaign" page (its <c>detailsURL</c>), used as the fallback
+    /// destination for a sub-only drop's buy link when the campaign isn't tied to one channel.</summary>
+    public string? DetailsUrl { get; init; }
+
     /// <summary>Channel logins the campaign is restricted to (empty = any drops-enabled channel).</summary>
     public IReadOnlyList<string> AllowedChannels { get; init; } = Array.Empty<string>();
+
+    /// <summary>Where a "buy drop" link sends the user to subscribe: the first allow-listed channel's
+    /// subscribe page, or the campaign details page for open (any-channel) campaigns.</summary>
+    public string? SubscribeUrl => AllowedChannels.Count > 0
+        ? $"https://www.twitch.tv/subs/{AllowedChannels[0]}"
+        : DetailsUrl;
 
     public IReadOnlyList<TimedDrop> Drops { get; init; } = Array.Empty<TimedDrop>();
 
@@ -191,6 +224,9 @@ public partial class DropsCampaign : ObservableModel
     partial void OnLinkedChanged(bool value) => OnPropertyChanged(nameof(LinkedText));
 
     public bool HasBadgeOrEmote => Drops.Any(d => d.Benefits.Any(b => b.IsBadgeOrEmote));
+
+    /// <summary>Whether any of this campaign's drops are subscription-gated (drives the "sub" badge).</summary>
+    public bool RequiresSubscription => Drops.Any(d => d.RequiresSubscription);
 
     public CampaignStatus Status
     {

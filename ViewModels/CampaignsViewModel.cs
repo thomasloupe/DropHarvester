@@ -96,6 +96,17 @@ public partial class CampaignsViewModel : ObservableViewModel
     [RelayCommand]
     void ToggleView() => VerticalView = !VerticalView;
 
+    /// <summary>Opens the subscribe page for a sub-only drop (its campaign's subscribe URL), since these
+    /// can't be harvested by watching - the user earns them by subscribing.</summary>
+    /// <param name="url">The subscribe URL to open.</param>
+    [RelayCommand]
+    async Task BuyDrop(string? url)
+    {
+        if (string.IsNullOrEmpty(url))
+            return;
+        try { await Launcher.Default.OpenAsync(url); } catch { }
+    }
+
     /// <summary>Publishes an info-level log line to the harvester event bus.</summary>
     /// <param name="message">the text to log.</param>
     void Log(string message) => _bus.Publish(new LogEvent(message, HarvesterLogLevel.Info));

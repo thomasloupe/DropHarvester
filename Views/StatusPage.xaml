@@ -178,7 +178,13 @@
                         </Border>
                         <VerticalStackLayout Grid.Column="1" Spacing="4">
                             <Grid ColumnDefinitions="*,Auto">
-                                <Label Text="{Binding ActiveDropName}" Style="{StaticResource Body}" LineBreakMode="TailTruncation" />
+                                <HorizontalStackLayout Spacing="6">
+                                    <Border BackgroundColor="#9146FF" StrokeThickness="0" StrokeShape="RoundRectangle 4"
+                                            Padding="5,1" VerticalOptions="Center" IsVisible="{Binding ActiveDropRequiresSubscription}">
+                                        <Label Text="{loc:Tr Badge_Sub}" TextColor="White" FontSize="10" FontAttributes="Bold" />
+                                    </Border>
+                                    <Label Text="{Binding ActiveDropName}" Style="{StaticResource Body}" LineBreakMode="TailTruncation" />
+                                </HorizontalStackLayout>
                                 <Label Grid.Column="1" Text="{Binding ActiveDropProgressText}" Style="{StaticResource Muted}" />
                             </Grid>
                             <ProgressBar Progress="{Binding ActiveDropProgress}" ProgressColor="{StaticResource DhAccent}" />
@@ -214,8 +220,14 @@
                                             StrokeThickness="1" StrokeShape="RoundRectangle 6">
                                         <Image Source="{Binding RewardImageUrl}" Aspect="AspectFit" />
                                     </Border>
-                                    <Label Grid.Column="1" Text="{Binding RewardName}" Style="{StaticResource Body}" FontSize="13"
-                                           VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                                    <HorizontalStackLayout Grid.Column="1" Spacing="6" VerticalOptions="Center">
+                                        <Border BackgroundColor="#9146FF" StrokeThickness="0" StrokeShape="RoundRectangle 4"
+                                                Padding="5,1" VerticalOptions="Center" IsVisible="{Binding RequiresSubscription}">
+                                            <Label Text="{loc:Tr Badge_Sub}" TextColor="White" FontSize="10" FontAttributes="Bold" />
+                                        </Border>
+                                        <Label Text="{Binding RewardName}" Style="{StaticResource Body}" FontSize="13"
+                                               VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                                    </HorizontalStackLayout>
                                     <Label Grid.Column="2" Text="{Binding ProgressText}" Style="{StaticResource Muted}"
                                            FontSize="12" VerticalOptions="Center" />
                                 </Grid>

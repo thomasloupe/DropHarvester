@@ -111,13 +111,6 @@
                         <Label Text="{loc:Tr Settings_IncludeBadgeEmote}" Style="{StaticResource Body}" VerticalOptions="Center" />
                         <Switch Grid.Column="1" IsToggled="{Binding EnableBadgesEmotes}" OnColor="{StaticResource DhAccent}" />
                     </Grid>
-                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-                        <VerticalStackLayout>
-                            <Label Text="{loc:Tr Settings_HarvestSubDrops}" Style="{StaticResource Body}" />
-                            <Label Text="{loc:Tr Settings_HarvestSubDropsDescription}" Style="{StaticResource Muted}" FontSize="12" />
-                        </VerticalStackLayout>
-                        <Switch Grid.Column="1" IsToggled="{Binding HarvestSubDrops}" OnColor="{StaticResource DhAccent}" />
-                    </Grid>
                     <Grid ColumnDefinitions="*,Auto">
                         <Label Text="{loc:Tr Settings_AutoClaimChannelPoints}" Style="{StaticResource Body}" VerticalOptions="Center" />
                         <Switch Grid.Column="1" IsToggled="{Binding AutoClaimChannelPoints}" OnColor="{StaticResource DhAccent}" />
