@@ -127,6 +127,8 @@ public static partial class LocStrings
         ["Settings_ShowUnlinkedInChannels"] = "Показывать непривязанные игры в Каналах",
         ["Settings_ShowUnlinkedInChannelsDescription"] = "По умолчанию выключено. Пропуск каналов непривязанных игр экономит запросы к каталогу (вызовы API).",
         ["Settings_IncludeBadgeEmote"] = "Включать кампании со значками/эмоциями (без привязки)",
+        ["Settings_HarvestSubDrops"] = "Собирать дропы, требующие подписку",
+        ["Settings_HarvestSubDropsDescription"] = "Также пытаться получить дропы, требующие подписку на канал. По умолчанию выключено, так как одно время просмотра их не открывает.",
         ["Settings_AutoClaimChannelPoints"] = "Автоматически получать баллы канала на просматриваемом канале",
         ["Settings_WhenOverridingHarvest"] = "При переопределении собирать",
         ["Settings_WhenOverridingHarvestDescription"] = "Что делает нажатие «Собрать» на кампании: всю кампанию, только её следующий drop (затем обратно в авто) или спрашивать каждый раз.",

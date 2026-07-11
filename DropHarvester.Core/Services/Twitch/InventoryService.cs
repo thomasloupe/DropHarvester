@@ -470,6 +470,7 @@ public sealed class InventoryService : IInventoryService
             Id = id,
             Name = d.Str("name") ?? "Drop",
             RequiredMinutes = d.IntOr("requiredMinutesWatched"),
+            RequiredSubs = d.IntOr("requiredSubs"),
             StartsAt = d.Date("startAt"),
             EndsAt = d.Date("endAt"),
             Benefits = benefits,

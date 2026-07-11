@@ -56,6 +56,10 @@ public sealed class AppSettings
     /// <summary>Also harvest campaigns whose only rewards are badges/emotes (usually require no link).</summary>
     public bool EnableBadgesEmotes { get; set; }
 
+    /// <summary>Also harvest subscription-gated drops (Twitch requiredSubs greater than zero). Off by
+    /// default since they can't be earned by watch time unless you hold the required subs.</summary>
+    public bool HarvestSubDrops { get; set; }
+
     /// <summary>Auto-claim the channel-points bonus chest on the channel being watched.</summary>
     public bool AutoClaimChannelPoints { get; set; }
 

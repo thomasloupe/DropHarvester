@@ -127,6 +127,8 @@ public static partial class LocStrings
         ["Settings_ShowUnlinkedInChannels"] = "Afficher les jeux non liés dans Chaînes",
         ["Settings_ShowUnlinkedInChannelsDescription"] = "Désactivé par défaut. Ignorer les chaînes des jeux non liés économise des recherches d'annuaire (appels API).",
         ["Settings_IncludeBadgeEmote"] = "Inclure les campagnes de badge/emote (sans lien)",
+        ["Settings_HarvestSubDrops"] = "Récolter les drops nécessitant un abonnement",
+        ["Settings_HarvestSubDropsDescription"] = "Tenter aussi les drops qui exigent un abonnement à la chaîne. Désactivé par défaut, car le temps de visionnage seul ne les débloque pas.",
         ["Settings_AutoClaimChannelPoints"] = "Réclamer automatiquement les points de chaîne sur la chaîne regardée",
         ["Settings_WhenOverridingHarvest"] = "Lors d'un forçage, récolter",
         ["Settings_WhenOverridingHarvestDescription"] = "Ce que fait un clic sur « Récolter » sur une campagne : toute la campagne, seulement son prochain drop (puis retour à l'automatique), ou demander à chaque fois.",

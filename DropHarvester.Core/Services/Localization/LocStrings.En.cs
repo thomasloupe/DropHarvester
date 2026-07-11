@@ -128,6 +128,8 @@ public static partial class LocStrings
         ["Settings_ShowUnlinkedInChannels"] = "Show unlinked games in Channels",
         ["Settings_ShowUnlinkedInChannelsDescription"] = "Off by default. Skipping unlinked games' channels saves directory lookups (API calls).",
         ["Settings_IncludeBadgeEmote"] = "Include badge/emote campaigns (no link)",
+        ["Settings_HarvestSubDrops"] = "Harvest subscription-required drops",
+        ["Settings_HarvestSubDropsDescription"] = "Also attempt drops that require a channel subscription. Off by default since watch time alone can't earn them.",
         ["Settings_AutoClaimChannelPoints"] = "Auto-claim channel points on watched channel",
         ["Settings_WhenOverridingHarvest"] = "When overriding, harvest",
         ["Settings_WhenOverridingHarvestDescription"] = "What clicking \"Harvest\" on a campaign does: the whole campaign, just its next drop (then back to auto), or ask each time.",

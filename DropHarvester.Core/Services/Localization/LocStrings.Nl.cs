@@ -127,6 +127,8 @@ public static partial class LocStrings
         ["Settings_ShowUnlinkedInChannels"] = "Niet-gekoppelde games tonen in Kanalen",
         ["Settings_ShowUnlinkedInChannelsDescription"] = "Standaard uit. Het overslaan van kanalen van niet-gekoppelde games bespaart mapopzoekingen (API-aanroepen).",
         ["Settings_IncludeBadgeEmote"] = "Badge-/emote-campagnes opnemen (geen koppeling)",
+        ["Settings_HarvestSubDrops"] = "Abonnement-vereiste drops oogsten",
+        ["Settings_HarvestSubDropsDescription"] = "Ook drops proberen die een kanaalabonnement vereisen. Standaard uit, omdat kijktijd alleen ze niet oplevert.",
         ["Settings_AutoClaimChannelPoints"] = "Kanaalpunten automatisch claimen op bekeken kanaal",
         ["Settings_WhenOverridingHarvest"] = "Bij overschrijven, oogst",
         ["Settings_WhenOverridingHarvestDescription"] = "Wat er gebeurt als je op \"Oogsten\" klikt bij een campagne: de hele campagne, alleen de volgende drop (daarna terug naar automatisch), of elke keer vragen.",

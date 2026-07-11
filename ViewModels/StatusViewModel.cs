@@ -472,7 +472,9 @@ public partial class StatusViewModel : ObservableViewModel
                 NextUpDropImageUrl = nu.Drop?.RewardImageUrl ?? nu.Campaign?.ImageUrl;
                 NextUpDrops.Clear();
                 if (nu.Campaign is not null)
-                    foreach (var d in nu.Campaign.Drops.OrderBy(d => d.RequiredMinutes))
+                    // only drops still needing watch-time - claimed/complete (incl. 0-minute sub drops
+                    // that read as complete) don't belong in the upcoming list
+                    foreach (var d in nu.Campaign.Drops.Where(d => !d.IsClaimed && !d.IsComplete).OrderBy(d => d.RequiredMinutes))
                         NextUpDrops.Add(d);
                 break;
 

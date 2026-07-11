@@ -127,6 +127,7 @@ public partial class SettingsViewModel : ObservableViewModel
         HarvestImpossibleDrops = _s.HarvestImpossibleDrops;
         ShowUnlinkedInChannels = _s.ShowUnlinkedInChannels;
         EnableBadgesEmotes = _s.EnableBadgesEmotes;
+        HarvestSubDrops = _s.HarvestSubDrops;
         AutoClaimChannelPoints = _s.AutoClaimChannelPoints;
         OverrideModeIndex = (int)_s.OverrideMode;
         var langIdx = Array.FindIndex(Languages, l => string.Equals(l.Code, _s.Language, StringComparison.OrdinalIgnoreCase));
@@ -276,6 +277,7 @@ public partial class SettingsViewModel : ObservableViewModel
     [ObservableProperty] private bool _harvestImpossibleDrops;
     [ObservableProperty] private bool _showUnlinkedInChannels;
     [ObservableProperty] private bool _enableBadgesEmotes;
+    [ObservableProperty] private bool _harvestSubDrops;
     [ObservableProperty] private bool _autoClaimChannelPoints;
     [ObservableProperty] private string _proxy = "";
     [ObservableProperty] private bool _minimizeToTray;
@@ -825,6 +827,7 @@ public partial class SettingsViewModel : ObservableViewModel
         _s.HarvestImpossibleDrops = HarvestImpossibleDrops;
         _s.ShowUnlinkedInChannels = ShowUnlinkedInChannels;
         _s.EnableBadgesEmotes = EnableBadgesEmotes;
+        _s.HarvestSubDrops = HarvestSubDrops;
         _s.AutoClaimChannelPoints = AutoClaimChannelPoints;
         _s.OverrideMode = (OverrideMode)OverrideModeIndex;
         _s.Proxy = string.IsNullOrWhiteSpace(Proxy) ? null : Proxy.Trim();
@@ -875,6 +878,7 @@ public partial class SettingsViewModel : ObservableViewModel
     /// <summary>Saves and refreshes the harvester when the badges/emotes toggle changes.</summary>
     /// <param name="value">the new toggle value.</param>
     partial void OnEnableBadgesEmotesChanged(bool value) { Save(); _harvester.RequestRefresh(); }
+    partial void OnHarvestSubDropsChanged(bool value) { Save(); _harvester.RequestRefresh(); }
     /// <summary>Saves when the auto-claim-channel-points toggle changes.</summary>
     /// <param name="value">the new toggle value.</param>
     partial void OnAutoClaimChannelPointsChanged(bool value) => Save();

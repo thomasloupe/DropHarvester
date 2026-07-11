@@ -1183,7 +1183,9 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
     /// "Finished", not a skip to announce.</summary>
     /// <param name="c">The campaign to test.</param>
     bool IsCampaignFinishedForHarvesting(DropsCampaign c)
-        => c.Drops.Count > 0 && c.Drops.All(d => d.IsClaimed || d.IsComplete || IsClaimedThisCampaign(d) || WeClaimedDrop(d));
+        => c.Drops.Count > 0 && c.Drops.All(d => d.IsClaimed || d.IsComplete || IsClaimedThisCampaign(d) || WeClaimedDrop(d)
+                                                 // a sub-gated drop we're not harvesting doesn't keep the campaign "open"
+                                                 || (!Settings.HarvestSubDrops && d.RequiresSubscription));
 
     /// <summary>Log each skipped game's reason once (deduped by game within this pass, and again by
     /// (game, reason) across passes via <see cref="_skipReasonLogged"/>), so the log isn't spammed.</summary>
@@ -1265,6 +1267,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
                                            && !WeClaimedDrop(d)                   // this exact tier is in our ledger
                                            && !IsClaimedThisCampaign(d)          // claimed this run (self can lag)
                                            && (!dedupe || !IsAlreadyOwned(d))     // opt-in: skip owned rewards
+                                           && (Settings.HarvestSubDrops || !d.RequiresSubscription) // opt-in: sub-gated drops
                                            && !IsSkipped(d.Id)
                                            && (Settings.HarvestImpossibleDrops || CanFinishInTime(c, d)));
     }
@@ -2308,6 +2311,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
                 Drops = c.Drops.OrderBy(d => d.RequiredMinutes).Select(d => new
                 {
                     d.Name, d.RequiredMinutes, d.CurrentMinutes, d.IsClaimed, d.IsComplete,
+                    d.RequiredSubs, d.RequiresSubscription,
                     ClaimedThisCampaign = IsClaimedThisCampaign(d),
                     LedgerClaimed = WeClaimedDrop(d), // per-tier ledger (survives self lag)
                     GivenUp = IsSkipped(d.Id),

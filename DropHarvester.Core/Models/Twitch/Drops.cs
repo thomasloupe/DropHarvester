@@ -16,6 +16,13 @@ public partial class TimedDrop : ObservableModel
     public DateTimeOffset? EndsAt { get; init; }
     public IReadOnlyList<Benefit> Benefits { get; init; } = Array.Empty<Benefit>();
 
+    /// <summary>Number of channel subscriptions Twitch requires to earn this drop (its <c>requiredSubs</c>).
+    /// Greater than zero means the drop is subscription-gated and can't be earned by watch time alone.</summary>
+    public int RequiredSubs { get; init; }
+
+    /// <summary>Whether this drop is subscription-gated (requires one or more subs to earn).</summary>
+    public bool RequiresSubscription => RequiredSubs > 0;
+
     /// <summary>Ids of drops that must be earned before this one becomes available.</summary>
     public IReadOnlyList<string> PreconditionDropIds { get; init; } = Array.Empty<string>();
 

@@ -127,6 +127,8 @@ public static partial class LocStrings
         ["Settings_ShowUnlinkedInChannels"] = "Mostrar juegos sin vincular en Canales",
         ["Settings_ShowUnlinkedInChannelsDescription"] = "Desactivado por defecto. Omitir los canales de juegos sin vincular ahorra consultas al directorio (llamadas a la API).",
         ["Settings_IncludeBadgeEmote"] = "Incluir campañas de insignias/emotes (sin vínculo)",
+        ["Settings_HarvestSubDrops"] = "Cosechar drops que requieren suscripción",
+        ["Settings_HarvestSubDropsDescription"] = "También intentar drops que requieren una suscripción al canal. Desactivado por defecto, ya que el tiempo de visualización no basta para conseguirlos.",
         ["Settings_AutoClaimChannelPoints"] = "Reclamar automáticamente puntos de canal en el canal visto",
         ["Settings_WhenOverridingHarvest"] = "Al usar anulación, cosechar",
         ["Settings_WhenOverridingHarvestDescription"] = "Lo que hace al pulsar \"Cosechar\" en una campaña: toda la campaña, solo su siguiente drop (luego vuelve a automático), o preguntar cada vez.",

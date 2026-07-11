@@ -127,6 +127,8 @@ public static partial class LocStrings
         ["Settings_ShowUnlinkedInChannels"] = "Nicht verknüpfte Spiele in Kanäle anzeigen",
         ["Settings_ShowUnlinkedInChannelsDescription"] = "Standardmäßig aus. Das Überspringen der Kanäle nicht verknüpfter Spiele spart Verzeichnisabfragen (API-Aufrufe).",
         ["Settings_IncludeBadgeEmote"] = "Abzeichen-/Emote-Kampagnen einbeziehen (ohne Verknüpfung)",
+        ["Settings_HarvestSubDrops"] = "Abo-pflichtige Drops sammeln",
+        ["Settings_HarvestSubDropsDescription"] = "Auch Drops versuchen, die ein Kanal-Abo erfordern. Standardmäßig aus, da reine Wiedergabezeit sie nicht freischaltet.",
         ["Settings_AutoClaimChannelPoints"] = "Kanalpunkte auf dem angesehenen Kanal automatisch einsammeln",
         ["Settings_WhenOverridingHarvest"] = "Bei manueller Auswahl ernten",
         ["Settings_WhenOverridingHarvestDescription"] = "Was ein Klick auf \"Ernten\" bei einer Kampagne bewirkt: die gesamte Kampagne, nur ihren nächsten Drop (dann zurück zur Automatik) oder jedes Mal nachfragen.",
