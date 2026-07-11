@@ -8,19 +8,26 @@ using DropHarvester.Services;
 
 namespace DropHarvester.ViewModels;
 
-/// <summary>One rendered log entry: its display text and the color it is drawn in.</summary>
+/// <summary>One rendered log entry: its display text, text color, and zebra-stripe row background.</summary>
 public sealed class LogLine
 {
     public required string Text { get; init; }
     public required Color Color { get; init; }
+
+    /// <summary>Alternating row background for readability. Fixed per line (from a monotonic counter) so
+    /// trimming the oldest line never re-stripes the ones still on screen.</summary>
+    public required Color RowBackground { get; init; }
 }
 
 /// <summary>Accumulates human-readable log/error events for the Log tab (capped to avoid growth).</summary>
 public partial class LogViewModel : ObservableViewModel
 {
     const int MaxLines = 500;
+    // Subtle zebra stripe for odd rows; even rows stay on the card background (transparent).
+    static readonly Color AltRowBackground = Color.FromArgb("#12FFFFFF");
     readonly IHarvesterEventBus _bus;
     readonly ISettingsStore _settings;
+    int _lineSeq; // monotonic counter driving the stripe parity (survives trimming)
 
     public ObservableCollection<LogLine> Lines { get; } = new UiObservableCollection<LogLine>();
 
@@ -54,7 +61,11 @@ public partial class LogViewModel : ObservableViewModel
 
     /// <summary>Clears all accumulated log lines.</summary>
     [RelayCommand]
-    void Clear() => Lines.Clear();
+    void Clear()
+    {
+        Lines.Clear();
+        _lineSeq = 0;
+    }
 
     // Label flips to "Copied!" briefly for feedback.
     [ObservableProperty] private string _copyLabel = Loc.T("Log_Copy");
@@ -98,9 +109,10 @@ public partial class LogViewModel : ObservableViewModel
             return;
 
         var stamp = FormatStamp(e.TimestampUtc);
+        var rowBg = (_lineSeq++ & 1) == 1 ? AltRowBackground : Colors.Transparent;
         MainThread.BeginInvokeOnMainThread(() =>
         {
-            Lines.Add(new LogLine { Text = $"[{stamp}] {l2.text}", Color = l2.color });
+            Lines.Add(new LogLine { Text = $"[{stamp}] {l2.text}", Color = l2.color, RowBackground = rowBg });
             while (Lines.Count > MaxLines)
                 Lines.RemoveAt(0);
         });
