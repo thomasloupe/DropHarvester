@@ -378,11 +378,13 @@ public partial class CampaignsViewModel : ObservableViewModel
     {
         foreach (var c in _all)
         {
-            // Show a drop as claimed when our claim history attributes its reward to THIS campaign, even
-            // if Twitch's per-drop self still lags at 0/xxx. Only genuine claims - a drop merely watched
-            // to 100% but not yet claimed must stay unclaimed (actionable), never shown as claimed.
+            // Show a drop as claimed when our claim history attributes its reward to THIS campaign, OR the
+            // harvester's per-tier ledger recorded it claimed (the truth for recurring campaigns whose
+            // reused reward id makes the history-time attribution ambiguous - the Albion case), even if
+            // Twitch's per-drop self still lags at 0/xxx. A drop merely watched to 100% but not yet claimed
+            // stays unclaimed (actionable), never shown as claimed.
             foreach (var d in c.Drops)
-                if (!d.IsClaimed && ClaimedThisRun(c, d))
+                if (!d.IsClaimed && (ClaimedThisRun(c, d) || _harvester.WasDropClaimed(d.Id)))
                     d.IsClaimed = true;
         }
     }

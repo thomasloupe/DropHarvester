@@ -100,9 +100,16 @@ public interface IHarvesterOrchestrator
     /// <summary>Whether every reward in this campaign has actually been CLAIMED per the harvester's ledger
     /// (Twitch's own self.isClaimed, or our claim ledger when Twitch's self lags at 0/unclaimed). Unlike
     /// <see cref="IsCampaignFinished"/> this does NOT count a merely 100%-watched-but-unclaimed drop, so the
-    /// Inventory's Finished filter can move a claimed campaign there without hiding one still awaiting a claim.</summary>
+    /// Inventory's Finished filter can move a claimed campaign there without hiding one still awaiting a claim.
+    /// A sub-only reward we can't earn (a "buy drop" tier) doesn't block a campaign from counting as claimed.</summary>
     /// <param name="campaignId">Id of the campaign to test.</param>
     bool AreAllRewardsClaimed(string campaignId);
+
+    /// <summary>Whether the harvester recorded this specific drop (by its definition id) as claimed in its
+    /// per-tier ledger this session - the truth even when Twitch's per-drop self has lagged back to
+    /// 0/unclaimed. The Inventory uses it to render a claimed drop as done, not 0%.</summary>
+    /// <param name="dropId">The drop-definition id to test.</param>
+    bool WasDropClaimed(string dropId);
 
     /// <summary>Whether the harvester has a drop in this campaign (by id) it would harvest RIGHT NOW (eligible,
     /// an unclaimed/unfinished/finishable drop). The Inventory's Finished filter uses this as a HARD
@@ -470,8 +477,14 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
     {
         var c = _campaigns.FirstOrDefault(x => string.Equals(x.Id, campaignId, StringComparison.OrdinalIgnoreCase));
         return c is not null && c.Drops.Count > 0
-            && c.Drops.All(d => d.IsClaimed || IsClaimedThisCampaign(d) || WeClaimedDrop(d));
+            // a sub-gated "buy drop" tier we can't earn doesn't hold the campaign out of Finished
+            && c.Drops.All(d => d.IsClaimed || IsClaimedThisCampaign(d) || WeClaimedDrop(d) || !d.SubRequirementMet);
     }
+
+    /// <summary>Whether this drop-definition id is in the harvester's per-tier claimed ledger.</summary>
+    /// <param name="dropId">The drop-definition id to test.</param>
+    /// <returns>True when we recorded this tier as claimed this session.</returns>
+    public bool WasDropClaimed(string dropId) => _claimedDropIds.Contains(dropId);
 
     /// <summary>Whether the harvester has a drop in the campaign (by id) it would harvest right now.</summary>
     /// <param name="campaignId">Id of the campaign to test.</param>
