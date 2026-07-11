@@ -206,10 +206,23 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
     string? _stallDropId;
     // When NOTHING credits across channels for this long while actively watching online streams, it's a
     // Twitch-side drops outage (watches are 204-acked but not credited), not a per-drop issue - surface a
-    // calm banner and keep running so it resumes the instant Twitch restores crediting.
+    // calm banner and keep running so it resumes the instant Twitch restores crediting. Only used as the
+    // fallback threshold when there are no backup transports to try first.
     const int OutageAfterMinutes = 12;
     DateTimeOffset _lastCreditUtc = DateTimeOffset.UtcNow; // last time ANY watched drop advanced
     bool _outageActive;
+
+    // Self-healing watch transport (mirrors the community "rotate the watch method" design): if nothing
+    // credits for a while though watches are accepted, the current transport may be the one Twitch just
+    // stopped crediting. We then walk the backup transports ONCE (a single bounded pass), giving each a
+    // couple of minutes to prove it credits; whichever restores progress becomes the new primary, and if
+    // none do it's a real outage - settle back and raise the banner. Set above StallSwitchMinutes so a
+    // cheaper channel switch is tried first; the credit clock is global so it survives channel hops.
+    const int NoProgressSwitchMinutes = 8;
+    const int RotationStepMinutes = 2; // minutes each backup transport gets to prove it credits
+    bool _rotating;                    // mid self-heal pass over the backup transports
+    int _rotationStepMinutes;          // minutes spent on the current backup transport
+    bool _selfHealExhausted;           // a full pass restored nothing; don't cycle again until a real credit
 
     /// <summary>What to do about a drop that isn't advancing: keep going, switch channel, or give up.</summary>
     enum StallAction { None, SwitchChannel, GiveUp }
@@ -284,6 +297,10 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
         _channelCooldownUntil.Clear();
         _skipReasonLogged.Clear();
         _lastCreditUtc = DateTimeOffset.UtcNow; // don't inherit a stale "no credit" clock across restarts
+        _rotating = false;
+        _rotationStepMinutes = 0;
+        _selfHealExhausted = false;
+        _watch.ResetTransport(); // start fresh on the preferred transport, not wherever a prior run rotated to
         ClearOutage();
         _cts = new CancellationTokenSource();
         _loop = Task.Run(() => RunAsync(_cts.Token));
@@ -654,7 +671,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             Log($"Watching: {channel.DisplayName} [{campaign.Game.Name}]");
         _lastPreemptCheck = DateTimeOffset.UtcNow; // don't re-evaluate priority for a few minutes
 
-        // stream-less watch: the sendSpadeEvents GQL mutation is the minute-watched heartbeat; read the
+        // stream-less watch: send the minute-watched heartbeat on the active transport, then read the
         // real progress back from the inventory afterwards
         await SendWatchAsync(channel, ct).ConfigureAwait(false);
         await SyncInventorySafeAsync(ct).ConfigureAwait(false);
@@ -734,8 +751,11 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             }
 
             _bus.Publish(new DropProgressEvent(drop));
-            EvaluateOutage(channel);
-            switch (CheckStall(drop))
+            // CheckStall first: it updates the credit clock (and OnConfirmedProgress) when minutes advance,
+            // so the transport self-heal below reads a fresh "how long since a real credit" signal.
+            var stallAction = CheckStall(drop);
+            EvaluateWatchHealth(channel);
+            switch (stallAction)
             {
                 case StallAction.GiveUp:
                     _skipDrops[drop.Id] = DateTimeOffset.UtcNow.AddMinutes(SkipRetryMinutes);
@@ -870,8 +890,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             _lastDropMinutes = mins;
             _stallMinutes = 0;
             _dropStallMinutes = 0;
-            _lastCreditUtc = DateTimeOffset.UtcNow; // a real credit landed
-            ClearOutage();
+            OnConfirmedProgress(); // a real credit landed: reset the clock, keep the transport, clear the banner
             return StallAction.None;
         }
 
@@ -894,19 +913,80 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
         _stallMinutes = 0;
     }
 
-    /// <summary>Raise the "Twitch drops outage" banner once nothing has credited across channels for the
-    /// outage window while actively watching an online stream. Kept until a real credit clears it; the
-    /// harvester keeps running throughout so it resumes the moment Twitch restores crediting.</summary>
+    /// <summary>Watch-transport self-heal, run once per watch tick while online. If progress has stalled
+    /// long enough, walk the backup transports one at a time (a single bounded pass), giving each a couple
+    /// of minutes to restore progress; if the whole pass fails, settle back on the known-good primary and
+    /// raise the outage banner. A real credit (via <see cref="OnConfirmedProgress"/>) cancels all of this.</summary>
     /// <param name="channel">The channel currently being watched.</param>
-    void EvaluateOutage(TwitchChannel channel)
+    void EvaluateWatchHealth(TwitchChannel channel)
     {
-        if (!channel.Online || _outageActive)
+        if (!channel.Online)
             return;
-        if (DateTimeOffset.UtcNow - _lastCreditUtc < TimeSpan.FromMinutes(OutageAfterMinutes))
+        var stalledMin = (DateTimeOffset.UtcNow - _lastCreditUtc).TotalMinutes;
+
+        if (!_rotating)
+        {
+            if (_selfHealExhausted || _outageActive)
+                return; // already tried everything - wait for a real credit to reset us
+            if (_watch.HasBackupTransports)
+            {
+                if (stalledMin >= NoProgressSwitchMinutes && _watch.RotateToNextTransport())
+                {
+                    _rotating = true;
+                    _rotationStepMinutes = 0;
+                    Log($"No confirmed drop progress for {NoProgressSwitchMinutes}m - trying backup watch method '{_watch.CurrentTransport}'.", HarvesterLogLevel.Debug);
+                }
+            }
+            else if (stalledMin >= OutageAfterMinutes)
+            {
+                _selfHealExhausted = true;
+                RaiseOutage();
+            }
+            return;
+        }
+
+        // On a backup transport: give it a couple of minutes to prove it credits before moving on.
+        _rotationStepMinutes++;
+        if (_rotationStepMinutes < RotationStepMinutes)
+            return;
+        _rotationStepMinutes = 0;
+        if (_watch.RotateToNextTransport())
+        {
+            Log($"Backup watch method didn't restore progress - trying next '{_watch.CurrentTransport}'.", HarvesterLogLevel.Debug);
+        }
+        else
+        {
+            _watch.SettleToPrimary();
+            _rotating = false;
+            _selfHealExhausted = true;
+            Log($"No watch method restored progress - back on '{_watch.CurrentTransport}'. Twitch drop crediting looks down or the endpoint is blocked here.", HarvesterLogLevel.Warn);
+            RaiseOutage();
+        }
+    }
+
+    /// <summary>Raise the "Twitch drops outage" banner (kept until a real credit clears it). The harvester
+    /// keeps running throughout so it resumes the moment Twitch restores crediting.</summary>
+    void RaiseOutage()
+    {
+        if (_outageActive)
             return;
         _outageActive = true;
         _bus.Publish(new DropsOutageEvent(true));
-        Log($"Nothing has credited for {OutageAfterMinutes}+ min across channels though watches are being accepted - Twitch drop crediting looks down. Still running; it will resume automatically when Twitch restores it.", HarvesterLogLevel.Warn);
+        Log("Nothing has credited across channels or watch methods though watches are being accepted - Twitch drop crediting looks down. Still running; it will resume automatically when Twitch restores it.", HarvesterLogLevel.Warn);
+    }
+
+    /// <summary>A real credit landed: adopt the active transport as known-good, cancel any in-flight
+    /// self-heal pass, and clear the outage banner. Called from the stall check when minutes advance.</summary>
+    void OnConfirmedProgress()
+    {
+        _lastCreditUtc = DateTimeOffset.UtcNow;
+        _watch.MarkCurrentGood();
+        if (_rotating)
+            Log($"Backup watch method '{_watch.CurrentTransport}' restored drop progress - staying on it.", HarvesterLogLevel.Debug);
+        _rotating = false;
+        _rotationStepMinutes = 0;
+        _selfHealExhausted = false;
+        ClearOutage();
     }
 
     /// <summary>Clear the drops-outage banner (called when a real credit lands or harvesting stops).</summary>
@@ -2312,6 +2392,8 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             IsRunning,
             Summary = _lastSummary,
             WatchBeaconUrl = _watch.BeaconUrl,
+            WatchTransport = _watch.CurrentTransport,
+            WatchSelfHeal = new { Rotating = _rotating, Exhausted = _selfHealExhausted, OutageActive = _outageActive },
             Active = new
             {
                 Channel = ActiveChannel?.DisplayName,

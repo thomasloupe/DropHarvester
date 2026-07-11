@@ -324,8 +324,10 @@ The solution is three projects:
     mutation), with bounded retry/backoff on transient failures.
   - `InventoryService` - campaign/drop discovery, progress sync, claiming, and the
     claimed-reward history.
-  - `WatchService` - the minute-watched heartbeat via the `sendSpadeEvents`
-    GraphQL mutation (gzip+base64 payload).
+  - `WatchService` - the minute-watched heartbeat, cascading across transports
+    (the `track` POST on beacon/spade/trowel hosts, then the `sendSpadeEvents`
+    GraphQL mutation) so the orchestrator can self-heal onto whichever Twitch is
+    crediting.
   - `WebsocketPool` - sharded PubSub (LISTEN/PING/reconnect).
   - `ChannelManager` - live drops-enabled channel discovery + stream state.
   - `HarvesterOrchestrator` - the run loop tying it together; emits `HarvesterEvent`s and

@@ -75,6 +75,25 @@ public static class TwitchConstants
         public static string ChannelStreamUpdate(string channelId) => $"broadcast-settings-update.{channelId}";
     }
 
+    // ----- Watch (minute-watched) transports -----
+    // The classic analytics "track" endpoint accepts the minute-watched POST on several interchangeable
+    // hosts. Which one is reachable varies per user (some ad/tracker blockers and VPNs filter one host but
+    // not another), so the watch cascades through them before falling back to the GraphQL mutation.
+    /// <summary>Interchangeable "track" hosts the minute-watched POST can be sent to, in preference order.</summary>
+    public static readonly string[] SpadeTrackHosts =
+    {
+        "https://beacon.twitch.tv/track",
+        "https://spade.twitch.tv/track",
+        "https://trowel.twitch.tv/track",
+    };
+
+    // The GraphQL minute-watched mutation - the transport Twitch periodically alternates the classic POST
+    // with. The event payload is gzipped, base64'd, and sent as the GZIP_B64 "twilight" input; a statusCode
+    // of 204 is the accept ack (real crediting is judged by observed drop progress, never by this ack).
+    /// <summary>The <c>sendSpadeEvents</c> GraphQL mutation used as the fallback watch transport.</summary>
+    public const string SendSpadeEventsMutation =
+        "mutation SendEvents($input: SendSpadeEventsInput!) { sendSpadeEvents(input: $input) { statusCode } }";
+
     // ----- Intervals -----
     public static readonly TimeSpan WatchInterval = TimeSpan.FromSeconds(59);
     public static readonly TimeSpan PingInterval = TimeSpan.FromMinutes(3);
