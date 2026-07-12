@@ -140,9 +140,9 @@ public static class MauiProgram
         services.AddSingleton<IAutostartService, WindowsAutostartService>();
         services.AddSingleton<ISoundService, WindowsSoundService>();
 #elif MACCATALYST
-        // macOS keeps the app alive when the window closes, so harvesting continues without a tray.
-        // A menu-bar (NSStatusItem) item needs AppKit interop and is validated in the macOS pass.
-        services.AddSingleton<ITrayService, NoopTrayService>();
+        // A menu-bar (NSStatusItem) item with Open / Quit, driven through the Objective-C runtime since
+        // AppKit isn't referenceable from Catalyst at compile time.
+        services.AddSingleton<ITrayService, MacTrayService>();
         services.AddSingleton<INotificationService, MacNotificationService>();
         services.AddSingleton<IAutostartService, MacAutostartService>();
         services.AddSingleton<ISoundService, MacSoundService>();
