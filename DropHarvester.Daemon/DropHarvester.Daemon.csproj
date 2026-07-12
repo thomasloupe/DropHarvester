@@ -12,8 +12,8 @@
     <Nullable>enable</Nullable>
     <!-- Smaller, dependency-light container (no ICU needed); the engine only uses ordinal/invariant. -->
     <InvariantGlobalization>true</InvariantGlobalization>
-    <Version>1.18.1</Version>
-    <InformationalVersion>1.18.1</InformationalVersion>
+    <Version>1.18.2</Version>
+    <InformationalVersion>1.18.2</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>

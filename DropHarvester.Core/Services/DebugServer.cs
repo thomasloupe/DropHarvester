@@ -172,19 +172,39 @@ public sealed class DebugServer : IDebugServer
             {
                 "" or "/index" => ("text/html", IndexHtml()),
                 "/snapshot" => ("application/json", JsonSerializer.Serialize(_harvester.GetDebugSnapshot(), JsonOpts)),
+                "/campaigns-all" => ("application/json", JsonSerializer.Serialize(_harvester.DebugAllCampaigns(), JsonOpts)),
+                "/dashboard" => ("application/json", JsonSerializer.Serialize(await DashboardAsync(ct).ConfigureAwait(false), JsonOpts)),
                 "/log" => ("text/plain", LogText()),
                 "/crashlog" => ("text/plain", CrashLogText()),
                 "/claims-raw" => ("application/json", await _inventory.GetClaimHistoryRawJsonAsync(ct).ConfigureAwait(false)),
                 "/harvest" => ("application/json", Harvest(query)),
                 "/watch-probe" => ("application/json", JsonSerializer.Serialize(await _harvester.DebugWatchProbeAsync(ct).ConfigureAwait(false), JsonOpts)),
                 "/authstate" => ("application/json", JsonSerializer.Serialize(_harvester.DebugAuthState(), JsonOpts)),
-                _ => ("text/plain", "Not found. Try / , /snapshot , /claims-raw , /watch-probe , /authstate , /harvest , /crashlog or /log"),
+                _ => ("text/plain", "Not found. Try / , /snapshot , /campaigns-all , /claims-raw , /watch-probe , /authstate , /harvest , /crashlog or /log"),
             };
         }
         catch (Exception ex)
         {
             return ("text/plain", $"Error building {path}: {ex.Message}\n{ex}");
         }
+    }
+
+    /// <summary>Handles /dashboard: the raw dashboard summary of EVERY campaign (Status + Linked), which is
+    /// what the harvester filters on to decide which campaigns it will even consider (Active + Linked).</summary>
+    /// <param name="ct">Cancels the dashboard fetch.</param>
+    /// <returns>All campaign summaries with their status and link state.</returns>
+    async Task<object> DashboardAsync(CancellationToken ct)
+    {
+        var sums = await _inventory.FetchDashboardAsync(ct).ConfigureAwait(false);
+        return new
+        {
+            Count = sums.Count,
+            HarvesterConsiders = "Status == Active AND (Linked OR game on 'Harvest unlinked games')",
+            Campaigns = sums
+                .OrderBy(s => s.Game.Name).ThenBy(s => s.Name)
+                .Select(s => new { s.Id, Game = s.Game.Name, s.Name, Status = s.Status.ToString(), s.Linked, s.StartsAt, s.EndsAt })
+                .ToList(),
+        };
     }
 
     /// <summary>Handles /harvest: with ?clear=1 releases the override, with ?id=X pins that campaign/drop,
@@ -253,6 +273,7 @@ public sealed class DebugServer : IDebugServer
         + "a{color:#a970ff;font-size:18px;display:block;margin:10px 0}</style></head><body>"
         + "<h1>DropHarvester debug</h1>"
         + "<a href=\"/snapshot\">/snapshot</a> - live harvester state + per-campaign/drop decisions (JSON)"
+        + "<a href=\"/campaigns-all\">/campaigns-all</a> - EVERY discovered campaign (incl. finished/inactive) + why it's skipped (JSON)"
         + "<a href=\"/claims-raw\">/claims-raw</a> - raw claim history from Twitch (gameEventDrops, JSON)"
         + "<a href=\"/watch-probe\">/watch-probe</a> - send one minute-watched heartbeat now, dump the full request/response (JSON)"
         + "<a href=\"/authstate\">/authstate</a> - current auth/session context, secrets redacted (JSON)"

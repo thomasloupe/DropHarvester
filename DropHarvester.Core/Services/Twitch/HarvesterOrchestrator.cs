@@ -122,6 +122,11 @@ public interface IHarvesterOrchestrator
     /// <summary>A serializable snapshot of the harvester's live state + per-campaign/drop decisions, for
     /// the debug server (why each campaign is harvested/skipped/finished, claim attribution, etc.).</summary>
     object GetDebugSnapshot();
+
+    /// <summary>Every discovered campaign (NOT just the harvestable candidates the snapshot shows), each
+    /// with its Status/IsActive/IsFinished and per-drop state, so a campaign the harvester is skipping or
+    /// treating as finished can be inspected even though it's filtered out of the main snapshot.</summary>
+    object DebugAllCampaigns();
 }
 
 public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
@@ -2452,6 +2457,39 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
                     }).ToList(),
                 }).ToList(),
             }).ToList(),
+        };
+    }
+
+    /// <summary>Dumps EVERY discovered campaign (not just the harvestable candidates in the main snapshot),
+    /// each with why it is / isn't a harvesting candidate, so a campaign the harvester is skipping or
+    /// treating as finished can be inspected even when it's filtered out of /snapshot.</summary>
+    /// <returns>A serializable object listing all campaigns and their drops.</returns>
+    public object DebugAllCampaigns()
+    {
+        return new
+        {
+            GeneratedUtc = DateTimeOffset.UtcNow,
+            TotalCampaigns = _campaigns.Count,
+            Campaigns = _campaigns
+                .OrderBy(c => c.Game.Name).ThenBy(c => c.Name)
+                .Select(c => new
+                {
+                    c.Id, c.Name, Game = c.Game.Name,
+                    Status = c.Status.ToString(),
+                    c.IsActive,
+                    IsFinished = c.IsFinished,                       // model: all drops claimed/complete
+                    FinishedForHarvesting = IsCampaignFinishedForHarvesting(c),
+                    // why it is / isn't in the harvestable candidate set (/snapshot)
+                    InCandidateSet = c.IsActive && !c.IsFinished,
+                    BlockReason = HarvestBlockReason(c),
+                    Drops = c.Drops.OrderBy(d => d.RequiredMinutes).Select(d => new
+                    {
+                        d.Name, d.RequiredMinutes, d.CurrentMinutes, d.IsClaimed, d.IsComplete,
+                        d.RequiredSubs, d.CurrentSubs, d.SubRequirementMet,
+                        LedgerClaimed = WeClaimedDrop(d),
+                        ClaimedThisCampaign = IsClaimedThisCampaign(d),
+                    }).ToList(),
+                }).ToList(),
         };
     }
 }

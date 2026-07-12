@@ -79,7 +79,11 @@ public partial class TimedDrop : ObservableModel
         RequiredMinutes <= 0 ? (IsClaimed ? 1.0 : 0.0)
         : Math.Clamp((double)DisplayMinutes / RequiredMinutes, 0.0, 1.0);
 
-    public bool IsComplete => CurrentMinutes >= RequiredMinutes;
+    // Complete = watched to the required minutes. Sub-only and instant/participation drops have no watch
+    // requirement (RequiredMinutes 0), so they count as complete only once actually claimed - otherwise
+    // 0 >= 0 marks every unowned sub-gate and unearned participation drop as "done", which drops the whole
+    // campaign (its other, earnable drops included) out of harvesting.
+    public bool IsComplete => RequiredMinutes > 0 ? CurrentMinutes >= RequiredMinutes : IsClaimed;
 
     /// <summary>Has an earned-but-unclaimed instance still within the 24h post-campaign claim window.</summary>
     public bool CanClaim =>
@@ -258,9 +262,10 @@ public partial class DropsCampaign : ObservableModel
     /// <summary>All drops earned/claimed - nothing left to harvest here.</summary>
     public bool IsFinished => Drops.All(d => d.IsClaimed || d.IsComplete);
 
-    /// <summary>The next drop still needing watch-time, in order.</summary>
+    /// <summary>The next EARNABLE drop still to harvest, in order - skips sub-gated drops we don't hold the
+    /// subs for so "up next" and the scheduler's watch-time estimate reflect what we can actually earn.</summary>
     public TimedDrop? FirstUnharvestedDrop =>
-        Drops.OrderBy(d => d.RequiredMinutes).FirstOrDefault(d => !d.IsClaimed && !d.IsComplete);
+        Drops.OrderBy(d => d.RequiredMinutes).FirstOrDefault(d => !d.IsClaimed && !d.IsComplete && d.SubRequirementMet);
 
     /// <summary>The longest / final drop - completing it means the whole campaign is complete (all
     /// shorter tiers finish before it, as watch-time accrues to every drop together).</summary>
