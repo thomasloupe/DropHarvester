@@ -15,130 +15,60 @@ a number of extra features.
 
 ### Core harvesting
 
-- **Stream-less drop harvesting** - no video download; ~59s minute-watched heartbeat.
+- **Stream-less drop harvesting** - no video download; a ~59s minute-watched heartbeat.
+- **Automatic watch-method failover** - if Twitch stops crediting one watch method, it tries the backups and stays on whichever works, so a Twitch-side change costs minutes, not days.
 - **Automatic campaign discovery** from your linked accounts.
 - **Drops-enabled validation** - only harvests channels that can actually earn the drop.
-- **Auto-claim** drops the instant they complete (reacting to the claim websocket
-  event), with a safety net that re-scans every campaign at startup and once a
-  minute and retries forever - so a completed drop is never left unclaimed, even
-  through a missed websocket message, a connection failure, or an app restart.
-- **auto start/stop** as campaigns appear and finish.
-- **Sharded PubSub websockets** - track many channels for real-time online/offline
-  and drop events.
+- **Auto-claim** the instant a drop completes, with a safety net that re-scans and retries so nothing is left unclaimed through a missed event, outage, or restart.
+- **Auto start/stop** as campaigns appear and finish.
+- **Sharded PubSub websockets** - track many channels for real-time online/offline and drop events.
 - **Channel-points auto-claim** on the watched channel (optional).
 - **Persistent login** - device-code OAuth; the token is saved and reused.
 
 ### What to harvest, and in what order
 
 - **Game priority & exclusion lists** - harvest what you want, in the order you want.
-- **Prioritize ending soonest** - when enabled, campaigns are harvested by soonest
-  expiry, but the **priority list is still honored** wherever there's slack: a
-  priority drop is harvested ahead of a sooner one whenever deferring it wouldn't lose
-  it, and a sooner non-priority drop is only chosen when it won't cost you a
-  priority drop. (Earliest-deadline-first with priority promotion, so nothing
-  earnable is lost.)
-- **Prioritize by availability** (opt-in) - a tiebreaker on top of the order
-  above: when campaigns are otherwise tied, the game with **fewer** live
-  drops-enabled streamers is harvested first, so scarce-stream drops are grabbed while
-  a channel is actually live and plentiful games wait. Never overrides your
-  priority list.
+- **Prioritize ending soonest** - harvest by soonest expiry while still honoring your priority list wherever deferring a drop wouldn't lose it.
+- **Prioritize by availability** (opt-in) - a tiebreaker that grabs scarce-stream drops first when campaigns are otherwise tied. Never overrides your priority list.
 - **Priority-only mode** - ignore everything not on the priority list.
-- **Harvest unlinked games** (opt-in per game) - attempt games your account isn't
-  linked to; always harvested at the lowest priority.
-- **Per-game de-duplication** - add a game to the de-dupe list and it skips any
-  drop whose reward you already own (from Twitch's claimed-drop history).
+- **Harvest unlinked games** (opt-in per game) - attempt games your account isn't linked to, always at lowest priority.
+- **Per-game de-duplication** - skip any drop whose reward you already own.
 
 ### Channels
 
-- **Automatic channel switching** - reacts the instant the watched stream goes
-  down (via the stream-state websocket) and immediately re-scans every game's live
-  streams for the next target, rather than waiting for the next watch tick. If a
-  manual override's only stream goes offline, it harvests the next-best campaign
-  meanwhile and snaps back the moment the override target is live again - so it
-  never just sits idle while there are drops it could be earning.
-- **Official Campaign Channel handling** - channel-specific drops are watched on
-  their official channel first (for time efficiency), while generic drops keep
-  progressing on any channel.
-- **Prefer / Avoid channels** - right-click a channel in the **Channels** tab:
-  - **⭐ Prefer** - when a preferred channel is live for the game being harvested and no
-    official channel is required, DropHarvester idles on it instead of a random
-    top-viewer stream (the drop still credits, so you support the streamer at no
-    cost to harvesting). Priority/ending-soonest still decides *which game* is harvested;
-    an official channel always wins.
-  - **🚫 Avoid** - never idled on unless it's the only drops-enabled stream live for
-    that game right now.
-  - Both lists are also shown and editable (type a channel login, or remove) under
-    **Settings**.
-- **Collapsible per-game groups** - the Channels tab groups streams under each game
-  (in harvesting order), with an Official Campaign Channel column, live counts, and a
-  spinner while the list refreshes. The list fills in progressively and updates in
-  the background about every 5 minutes.
-- **"Not crediting" fast-switch** - if a drop makes no progress on an open-campaign
-  channel for a few minutes, that channel is benched and another is tried (official
-  channels are never fast-switched, since only they can credit their drop).
+- **Automatic channel switching** - reacts the instant the watched stream goes down and immediately re-scans for the next target. If a manual override's only stream goes offline, it harvests the next-best campaign meanwhile and snaps back when the override is live again.
+- **Official Campaign Channel handling** - channel-specific drops are watched on their official channel first; generic drops keep progressing on any channel.
+- **Prefer / Avoid channels** - right-click a channel to ⭐ Prefer it (idle on it when it's live for the game being harvested) or 🚫 Avoid it (only used if it's the last drops-enabled stream live). Both lists are also editable under Settings.
+- **Collapsible per-game groups** - the Channels tab groups streams by game with live counts, refreshing in the background about every 5 minutes.
+- **"Not crediting" fast-switch** - if a drop makes no progress on an open-campaign channel for a few minutes, it's benched and another is tried (official channels are never fast-switched).
 
 ### Inventory & status
 
-- **Live inventory** - the Campaigns tab shows every campaign with its drops and
-  progress, updates progress live while harvesting, and puts a purple **Harvesting** badge
-  on the campaign being harvested right now.
-- **Claim-based campaign tabs** - each campaign sits in exactly one tab:
-  **Finished** = every reward actually *claimed* (a drop watched to 100% but not yet
-  claimed is still actionable and stays under Upcoming, never Finished); **Expired**
-  = past its end date, claimed or not; **Upcoming** = anything else - not started
-  yet, or still has an unclaimed reward. Claim attribution uses reward-id
-  normalization and claim-time matching so re-used reward ids across concurrent
-  campaigns don't wrongly mark a still-earnable campaign done. Recurring or
-  region-variant campaigns that share a game + name collapse to a single row.
-- **Language** - a Settings dropdown switches the UI language live (no restart).
-  Supported: English, Español, Français, Deutsch, Русский, 简体中文, 日本語, 한국어,
-  Nederlands. All diagnostic logs are in English.
+- **Live inventory** - the Campaigns tab shows every campaign and drop with live progress, and a purple **Harvesting** badge on the one being harvested now.
+- **Subscription drops** - drops that need a channel sub are auto-detected and get a purple **SUB** badge; DropHarvester verifies whether you already qualify and skips the ones you don't, and drops earned by subscribing alone show a **Buy Drop** link. Sub-only campaigns sit under an opt-in **Sub-Only** filter.
+- **Claim-based campaign tabs** - each campaign sits in one tab: **Finished** (every reward claimed), **Expired** (past its end date), or **Upcoming** (anything still earnable). Claim attribution handles reward ids reused across concurrent campaigns so a still-earnable campaign is never wrongly marked done.
+- **Language** - a Settings dropdown switches the UI language live: English, Español, Français, Deutsch, Русский, 简体中文, 日本語, 한국어, Nederlands. Diagnostic logs stay English.
 
 ### Alerts & feedback
 
-- **Desktop notifications** - drop claimed, campaign complete, all drops harvested,
-  login expired.
-- **Drop-claimed sound** - choose any sound file (wav/mp3/m4a/aac/wma/aiff/ogg),
-  the **output device** (Windows can target any device; macOS uses the system
-  default), and the **volume**; a Test button plays it.
-- **Remote webhook alerts** - Discord / Slack / generic webhook, with per-event
-  toggles (new drop available, drop claimed, campaign complete, all harvested,
-  login expired).
-- **Connection watchdog** - if Twitch Drops go down or the connection is lost for a
-  sustained stretch (~20 min), a banner lets you know harvesting is paused; it resumes
-  automatically once the connection is back.
+- **Desktop notifications** - drop claimed, campaign complete, all drops harvested, login expired (each names the drop or campaign).
+- **Drop-claimed sound** - choose any sound file, output device, and volume, with a Test button.
+- **Remote webhook alerts** - Discord / Slack / generic webhook, with per-event toggles.
+- **Connection watchdog** - a banner if Twitch Drops go down or the connection drops for a sustained stretch; harvesting resumes automatically when it's back.
 
 ### Stats, log & app
 
-- **Stats & history dashboard** - lifetime drops/campaigns/watch-time, a 7-day
-  claims chart (hover a bar to see what was claimed that day), recent history, and
-  CSV/JSON export.
-- **Log tab** - the running output, with a **Copy** button (copies the whole
-  visible log to the clipboard) and auto-scroll that follows the newest line.
-- **Debug server** - an optional local HTTP endpoint that exposes everything the
-  app is doing under the hood. See [Debug server](#debug-server) below.
-- **Tray / menu-bar mode** - on Windows, closing the window hides it to the system
-  tray and harvesting keeps running; the tray icon restores it, right-click for Open /
-  Quit. (macOS keeps running when the window is closed; a menu-bar item is planned.)
-- **Resilience** - all Twitch calls retry transient failures (network/timeout/5xx/
-  429) with backoff, and claim/sync/points errors are logged and retried rather
-  than dropping the channel or killing the loop.
-- **In-app updates** - a real installer (Inno Setup `.exe` on Windows, `.pkg` on
-  macOS). The app silently checks a per-OS manifest on startup and pre-downloads
-  any newer version in the background. When one is ready, the Status tab shows an
-  **Update now** button
-  (silent install + relaunch); if you don't, it **auto-installs on the next
-  launch**. Settings has a manual **Check now** button. No download step, no
-  yes/no prompt - updates just happen.
-- **Autostart** with the OS (Windows Run key / macOS LaunchAgent), optionally
-  straight into the tray.
+- **Stats & history dashboard** - lifetime totals, a 7-day claims chart, recent history, and CSV/JSON export.
+- **Log tab** - the running output with a **Copy** button and auto-scroll.
+- **Debug server** - an optional local HTTP endpoint exposing what the app is doing. See [Debug server](#debug-server) below.
+- **Tray mode** (Windows) - closing the window hides it to the system tray and keeps harvesting; right-click for Open / Quit. On macOS the app keeps running when the window is closed.
+- **Resilience** - all Twitch calls retry transient failures with backoff, and claim/sync/points errors are logged and retried rather than killing the loop.
+- **In-app updates** - new versions download and install themselves in the background, with an **Update now** button on the Status tab if you'd rather not wait.
+- **Autostart** with the OS (Windows Run key / macOS LaunchAgent), optionally into the tray.
 
 ## Debug server
 
-The debug server is a small **localhost-only** HTTP endpoint for inspecting exactly
-what the app is doing - which Twitch calls ran, what Twitch reported, and every
-harvest / skip / claim decision the app made from that data. It's the fastest way to
-answer "why is *this* being harvested / skipped / shown as claimed?".
+A small **localhost-only** HTTP endpoint for inspecting exactly what the app is doing, so you can answer "why is *this* being harvested / skipped / shown as claimed?".
 
 **Enable it:** Settings -> **DEBUG SERVER** -> toggle **Run local debug server**
 (default port **5757**, editable). It starts immediately and again on app launch
@@ -149,10 +79,12 @@ Open **`http://localhost:5757/`** in a browser. Endpoints:
 
 - **`/`** - index with links to the endpoints below.
 - **`/snapshot`** - the main one: a JSON snapshot of live state and every decision.
-- **`/log`** - the rolling log as plain text (up to 2000 recent lines), the same
-  content as the Log tab.
-- **`/crashlog`** - the app's `crash.log` (unhandled exceptions plus caught
-  UI-dispatch errors), for diagnosing a crash without hunting the file on disk.
+- **`/claims-raw`** - the raw claimed-drop history from Twitch (JSON).
+- **`/watch-probe`** - send a minute-watched heartbeat on every watch method now and dump each request/response, so you can see which methods Twitch is accepting.
+- **`/authstate`** - the current auth/session context, secrets redacted (JSON).
+- **`/harvest`** - list harvestable targets; `?id=<id>` pins one, `?clear=1` releases (JSON).
+- **`/log`** - the rolling log as plain text (up to 2000 recent lines).
+- **`/crashlog`** - the app's `crash.log` (unhandled plus caught UI-dispatch errors).
 
 ### What `/snapshot` contains
 
@@ -162,6 +94,8 @@ Top level:
 - `Summary` - the current status line, including the reason when idle (e.g. "waiting
   for a stream to come online") so you can tell *why* nothing is being harvested
 - `Active` - the channel / game / campaign / drop being watched right now
+- `WatchTransport` / `WatchSelfHeal` - the watch method in use right now and the failover
+  state (whether it's mid-rotation, exhausted, or an outage is flagged)
 - `Override` - the manual "Harvest" override state: whether one is `Active`, its
   `CampaignId` / `Campaign` name, and whether it's `DropOnly`
 - `LastClaimSweepUtc` - when the all-campaign claim safety-net last ran
@@ -189,6 +123,8 @@ isn't being harvested:
 - `FinishedForHarvesting` - every drop is claimed/complete
 - `Drops[]` - each drop with:
   - `Name`, `RequiredMinutes`, `CurrentMinutes`, `IsClaimed`, `IsComplete`
+  - `RequiresSubscription`, `RequiredSubs`, `CurrentSubs`, `SubRequirementMet` - the sub
+    gate and whether you meet it
   - `ClaimedThisCampaign` - the claim-history verdict for this campaign
   - `GivenUp` - given up on this session (no progress)
   - `Benefits[]` - each reward with `Id`, `MatchKey` (the normalized id used for
@@ -336,9 +272,8 @@ The solution is three projects:
   `WebhookNotifier`, `DebugServer`, plus the `HarvesterEventBus`. App-only services stay in
   the app: `UpdateService` (installer-based updater) and `AlertsCoordinator` (bridges the
   event bus to notifications/webhooks/stats/tray/sound).
-- **Update checker** (`Services/UpdateService.cs`) - polls a self-hosted JSON
-  manifest for the latest per-OS version (on startup and once every 24 hours while
-  running); Windows self-install + relaunch. No GitHub or tokens required.
+- **Update checker** (`Services/UpdateService.cs`) - checks the GitHub Releases API for
+  the latest per-OS installer (on startup and once every 24 hours) and self-installs.
 - **UI** - MAUI Shell tabs (Status, Campaigns, Channels, Stats, Settings, Log),
   MVVM via CommunityToolkit.Mvvm, fed by an in-process `HarvesterEventBus`. Observable
   models and collections marshal changes to the UI thread via an injectable

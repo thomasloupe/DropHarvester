@@ -25,8 +25,8 @@ public interface IUpdateService
 {
     string CurrentVersion { get; }
 
-    /// <summary>Check the manifest for a newer version (no download).</summary>
-    /// <param name="ct">Cancels the manifest request.</param>
+    /// <summary>Check GitHub Releases for a newer version (no download).</summary>
+    /// <param name="ct">Cancels the request.</param>
     Task<UpdateInfo> CheckAsync(CancellationToken ct = default);
 
     /// <summary>Download the installer for <paramref name="info"/> into the pending cache, ready to
@@ -68,7 +68,7 @@ public sealed class UpdateService : IUpdateService
         // OUR assembly version (bumped in the csproj), NOT AppInfo.VersionString (reads a stale
         // apphost/package version on unpackaged WinUI). We report a 3-part semver (MAJOR.MINOR.PATCH);
         // AssemblyVersion stores a 4th component internally (0), which we drop here. Comparison via
-        // IsNewer/Pad is length-agnostic, so this stays compatible with any legacy 4-part manifest.
+        // IsNewer/Pad is length-agnostic, so this stays compatible with any legacy 4-part version.
         var v = typeof(UpdateService).Assembly.GetName().Version;
         if (v is not null)
             return $"{v.Major}.{v.Minor}.{v.Build}";
@@ -310,7 +310,7 @@ public sealed class UpdateService : IUpdateService
     static string Norm(string s) => s.Trim().TrimStart('v', 'V');
 
     /// <summary>Returns whether the candidate version is newer than the current one.</summary>
-    /// <param name="candidate">The version being tested (e.g. from the manifest).</param>
+    /// <param name="candidate">The version being tested (e.g. a GitHub release tag).</param>
     /// <param name="current">The running build's version.</param>
     static bool IsNewer(string candidate, string current)
     {

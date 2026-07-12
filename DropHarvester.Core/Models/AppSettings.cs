@@ -124,7 +124,7 @@ public sealed class AppSettings
     public bool LogUse24Hour { get; set; } = true;
 
     // ----- Updates -----
-    /// <summary>Check the update manifest for a newer version on startup.</summary>
+    /// <summary>Check GitHub Releases for a newer version on startup.</summary>
     public bool AutoCheckForUpdates { get; set; } = true;
 
     // ----- Debug server -----
