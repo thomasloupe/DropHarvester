@@ -24,6 +24,20 @@ public sealed class MacTrayService : ITrayService
     [DllImport(Objc, EntryPoint = "objc_msgSend")] static extern IntPtr IntPtr_msgSend_III(IntPtr receiver, IntPtr sel, IntPtr a, IntPtr b, IntPtr c);
     [DllImport(Objc, EntryPoint = "objc_msgSend")] static extern void void_msgSend_IntPtr(IntPtr receiver, IntPtr sel, IntPtr a);
     [DllImport(Objc, EntryPoint = "objc_msgSend")] static extern void void_msgSend_Bool(IntPtr receiver, IntPtr sel, [MarshalAs(UnmanagedType.I1)] bool a);
+    [DllImport(Objc, EntryPoint = "objc_msgSend")] static extern void void_msgSend_CGSize(IntPtr receiver, IntPtr sel, CGSize a);
+
+    /// <summary>Objective-C <c>NSSize</c>/<c>CGSize</c> (two CGFloats) for sizing the menu-bar image.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    struct CGSize
+    {
+        public double Width;
+        public double Height;
+
+        /// <summary>Creates a size with the given width and height.</summary>
+        /// <param name="w">Width in points.</param>
+        /// <param name="h">Height in points.</param>
+        public CGSize(double w, double h) { Width = w; Height = h; }
+    }
 
     TrayActionTarget? _target; // kept rooted so the Objective-C action target stays alive
     IntPtr _statusItem;
@@ -59,9 +73,10 @@ public sealed class MacTrayService : ITrayService
                 return;
             IntPtr_msgSend(_statusItem, sel_registerName("retain")); // the status item is autoreleased - keep it
 
-            // Short button title; the live status text lives in the menu so the menu bar stays compact.
+            // Show our app icon in the menu bar (falling back to a short "DH" label). The live status
+            // text lives in the menu, so the bar itself stays compact.
             var button = IntPtr_msgSend(_statusItem, sel_registerName("button"));
-            if (button != IntPtr.Zero)
+            if (button != IntPtr.Zero && !TrySetAppIconImage(button))
                 SetTitle(button, "DH");
 
             var menu = IntPtr_msgSend(IntPtr_msgSend(objc_getClass("NSMenu"), sel_registerName("alloc")), sel_registerName("init"));
@@ -107,6 +122,32 @@ public sealed class MacTrayService : ITrayService
     {
         var sep = IntPtr_msgSend(objc_getClass("NSMenuItem"), sel_registerName("separatorItem"));
         void_msgSend_IntPtr(menu, sel_registerName("addItem:"), sep);
+    }
+
+    /// <summary>Sets the status button's image to the app's own icon, sized to the menu bar. Returns false
+    /// (so the caller falls back to a text label) if the icon can't be obtained.</summary>
+    /// <param name="button">The NSStatusBarButton handle.</param>
+    /// <returns>True if the app icon was applied.</returns>
+    static bool TrySetAppIconImage(IntPtr button)
+    {
+        try
+        {
+            var app = IntPtr_msgSend(objc_getClass("NSApplication"), sel_registerName("sharedApplication"));
+            if (app == IntPtr.Zero)
+                return false;
+            var icon = IntPtr_msgSend(app, sel_registerName("applicationIconImage"));
+            if (icon == IntPtr.Zero)
+                return false;
+            // Constrain the (large) app icon to the menu-bar height so the item doesn't balloon in width.
+            void_msgSend_CGSize(icon, sel_registerName("setSize:"), new CGSize(18, 18));
+            void_msgSend_IntPtr(button, sel_registerName("setImage:"), icon);
+            void_msgSend_IntPtr(button, sel_registerName("setImagePosition:"), (IntPtr)2 /* NSImageOnly */);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>Sets an Objective-C object's <c>title</c> (via <c>setTitle:</c>) to the given string.</summary>
