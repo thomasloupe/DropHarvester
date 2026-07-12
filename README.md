@@ -61,7 +61,7 @@ a number of extra features.
 - **Stats & history dashboard** - lifetime totals, a 7-day claims chart, recent history, and CSV/JSON export.
 - **Log tab** - the running output with a **Copy** button and auto-scroll.
 - **Debug server** - an optional local HTTP endpoint exposing what the app is doing. See [Debug server](#debug-server) below.
-- **Tray mode** (Windows) - closing the window hides it to the system tray and keeps harvesting; right-click for Open / Quit. On macOS the app keeps running when the window is closed.
+- **Tray / menu-bar** - on Windows, closing the window hides it to the system tray and keeps harvesting (right-click for Open / Quit); on macOS a menu-bar item gives a status line, Open, and Quit.
 - **Resilience** - all Twitch calls retry transient failures with backoff, and claim/sync/points errors are logged and retried rather than killing the loop.
 - **In-app updates** - new versions download and install themselves in the background, with an **Update now** button on the Status tab if you'd rather not wait.
 - **Autostart** with the OS (Windows Run key / macOS LaunchAgent), optionally into the tray.
