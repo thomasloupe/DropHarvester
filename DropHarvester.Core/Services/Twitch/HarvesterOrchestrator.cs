@@ -772,7 +772,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             // CheckStall first: it updates the credit clock (and OnConfirmedProgress) when minutes advance,
             // so the transport self-heal below reads a fresh "how long since a real credit" signal.
             var stallAction = CheckStall(drop);
-            EvaluateWatchHealth(channel);
+            EvaluateWatchHealth(channel, campaign);
             switch (stallAction)
             {
                 case StallAction.GiveUp:
@@ -939,10 +939,28 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
     /// of minutes to restore progress; if the whole pass fails, settle back on the known-good primary and
     /// raise the outage banner. A real credit (via <see cref="OnConfirmedProgress"/>) cancels all of this.</summary>
     /// <param name="channel">The channel currently being watched.</param>
-    void EvaluateWatchHealth(TwitchChannel channel)
+    /// <param name="campaign">The campaign being harvested (its link state gates outage detection).</param>
+    void EvaluateWatchHealth(TwitchChannel channel, DropsCampaign campaign)
     {
         if (!channel.Online)
             return;
+
+        // An UNLINKED (opt-in "harvest unlinked") campaign not crediting is EXPECTED - Twitch won't
+        // progress a drop for a program the account isn't linked to - so it must never be read as a
+        // Twitch-side outage or trigger transport rotation (a real outage stops LINKED campaigns too, and
+        // that's what the banner is for). Keep the credit clock fresh so the wasted-on-unlinked time
+        // doesn't carry a false "nothing crediting" streak into the next linked watch, and clear a banner
+        // that this very situation may have wrongly raised.
+        if (!campaign.Linked)
+        {
+            _lastCreditUtc = DateTimeOffset.UtcNow;
+            _rotating = false;
+            _rotationStepMinutes = 0;
+            _selfHealExhausted = false;
+            ClearOutage();
+            return;
+        }
+
         var stalledMin = (DateTimeOffset.UtcNow - _lastCreditUtc).TotalMinutes;
 
         if (!_rotating)
