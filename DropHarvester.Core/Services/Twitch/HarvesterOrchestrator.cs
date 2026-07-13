@@ -805,9 +805,21 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
                         RecordDropClaimed(drop, DateTimeOffset.UtcNow);
                         Log($"'{drop.RewardName}' [{campaign.Game.Name}] never progressed and its reward is already in your history for this campaign - marking it claimed so it isn't retried.", HarvesterLogLevel.Warn);
                     }
+                    else if (drop.RealCurrentMinutes == 0)
+                    {
+                        // Never credited on the channels we tried: the WHOLE campaign isn't crediting right now
+                        // (an opt-in event drop Twitch won't credit here, a channel not actually airing the
+                        // drop, etc.). Bench EVERY tier together so we move on to something else instead of
+                        // grinding each tier of an uncreditable campaign one by one. The campaign stays in the
+                        // pool and retries after the cooldown - it may credit later (e.g. during the live event).
+                        var until = DateTimeOffset.UtcNow.AddMinutes(SkipRetryMinutes);
+                        foreach (var d in campaign.Drops)
+                            _skipDrops[d.Id] = until;
+                        Log($"No credit on any '{campaign.Name}' [{campaign.Game.Name}] drop after {GiveUpAfterMinutes} min across channels - benching the whole campaign for {SkipRetryMinutes} min and moving on (it stays in the list and retries later).", HarvesterLogLevel.Warn);
+                    }
                     else
-                        // giving up isn't progress - keep the global "no progress" banner until something advances
-                        Log($"No progress on '{drop.RewardName}' [{campaign.Game.Name}] after {GiveUpAfterMinutes} min across channels - skipping this drop for now.", HarvesterLogLevel.Warn);
+                        // made real progress then stalled - keep the global "no progress" banner until something advances
+                        Log($"No further progress on '{drop.RewardName}' [{campaign.Game.Name}] after {GiveUpAfterMinutes} min across channels - skipping this drop for now.", HarvesterLogLevel.Warn);
                     return; // re-pick a target; this drop is now excluded this session
                 case StallAction.SwitchChannel:
                     // channel-specific drops can ONLY credit on this channel, so switching away is pointless
@@ -1849,6 +1861,27 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
     /// same-game drop together instead of leaving some behind.</summary>
     /// <param name="campaign">The campaign to find a channel for.</param>
     /// <param name="ct">Cancels the lookups on shutdown.</param>
+    /// <summary>Whether Twitch reports this campaign's drop (or a harvestable same-game sibling's) ACTIVE on
+    /// the channel's current stream, so watching it will actually credit. A NULL available-drops result (the
+    /// check couldn't be made) is treated as "yes" - a channel is never skipped just because the query failed.</summary>
+    /// <param name="ch">The candidate channel (must have an id).</param>
+    /// <param name="campaign">The campaign we want to credit.</param>
+    /// <param name="siblings">Concurrent same-game harvestable campaigns a single watch could also credit.</param>
+    /// <param name="ct">Cancels the lookup on shutdown.</param>
+    async Task<bool> ChannelAirsCampaignAsync(
+        TwitchChannel ch, DropsCampaign campaign, IReadOnlyList<DropsCampaign> siblings, CancellationToken ct)
+    {
+        if (string.IsNullOrEmpty(ch.Id))
+            return true;
+        var available = await _inventory.FetchChannelDropCampaignIdsAsync(ch.Id!, ct).ConfigureAwait(false);
+        if (available is null)
+            return true; // couldn't check - never skip on a failed check
+        if (available.Contains(campaign.Id) || siblings.Any(s => available.Contains(s.Id)))
+            return true;
+        Log($"Skipping {ch.DisplayName} [{campaign.Game.Name}] - Twitch shows no active '{campaign.Name}' drop on it right now.", HarvesterLogLevel.Debug);
+        return false;
+    }
+
     async Task<TwitchChannel?> ChooseChannelAsync(DropsCampaign campaign, CancellationToken ct)
     {
         // (a manual "Watch" pick is handled up-front in PickWatchableTargetAsync, on the campaign matching
@@ -1865,30 +1898,36 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             var allowed = campaign.AllowedChannels.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             var live = await _channels.FetchLiveChannelsForGameAsync(campaign.Game, 100, ct).ConfigureAwait(false);
-            // among the LIVE allow-listed channels, take the one that also credits the most concurrent
-            // same-game campaigns (a channel on this restricted list may also sit in another campaign's
-            // list, so one watch advances both) - not merely the first one we happen to see
-            var best = live
-                .Where(ch => allowed.Contains(ch.Login) && !OnCooldown(ch.Login) && ch.Online && !string.IsNullOrEmpty(ch.Id))
-                .OrderByDescending(ch => CrossCreditScore(ch.Login, siblings))
-                .FirstOrDefault();
-            if (best is not null)
-                return best;
+            // among the LIVE allow-listed channels (the one that also credits the most concurrent same-game
+            // campaigns first), take the first that Twitch confirms is actually AIRING this campaign's drop
+            // right now - an allow-listed channel that isn't really running the drop (agorafutbol tagged for
+            // the event but with no active drop) is skipped so we don't burn time on a channel that can't credit
+            foreach (var ch in live
+                         .Where(c => allowed.Contains(c.Login) && !OnCooldown(c.Login) && c.Online && !string.IsNullOrEmpty(c.Id))
+                         .OrderByDescending(c => CrossCreditScore(c.Login, siblings)))
+                if (await ChannelAirsCampaignAsync(ch, campaign, siblings, ct).ConfigureAwait(false))
+                    return ch;
 
             var seen = live.Select(c => c.Login).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            // probe the not-yet-seen allow-list logins, checking the ones that credit the most concurrent
-            // campaigns first so a multi-campaign channel wins the tie when several are live
+            // probe the not-yet-seen allow-list logins (best cross-credit first), validating the drop is
+            // actually active before committing. Bounded so a huge allow-list (100s of channels) can't flood
+            // the API when few are truly airing it.
+            var probed = 0;
             foreach (var login in campaign.AllowedChannels
                          .Where(l => !seen.Contains(l) && !OnCooldown(l))
-                         .OrderByDescending(l => CrossCreditScore(l, siblings))
-                         .Take(40))
+                         .OrderByDescending(l => CrossCreditScore(l, siblings)))
             {
+                if (probed >= 15)
+                    break;
                 var ch = new TwitchChannel
                 {
                     Id = "", Login = login, DisplayName = login, Game = campaign.Game, DropsEnabled = true,
                 };
                 await _channels.RefreshChannelAsync(ch, ct).ConfigureAwait(false);
-                if (ch.Online && !string.IsNullOrEmpty(ch.Id))
+                if (!ch.Online || string.IsNullOrEmpty(ch.Id))
+                    continue;
+                probed++;
+                if (await ChannelAirsCampaignAsync(ch, campaign, siblings, ct).ConfigureAwait(false))
                     return ch;
             }
             return null;

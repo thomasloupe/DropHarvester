@@ -53,6 +53,15 @@ public interface IInventoryService
     /// <returns>The active drop id and minutes watched, or (null, 0) if none.</returns>
     Task<(string? dropId, int currentMinutes)> FetchCurrentSessionAsync(string channelId, CancellationToken ct = default);
 
+    /// <summary>The drop-campaign ids Twitch reports as ACTIVE on this channel's current stream right now
+    /// (its <c>viewerDropCampaigns</c>) - i.e. the campaigns that would actually credit by watching it. An
+    /// empty set means the channel has NO drop active (so an allow-listed channel not really airing the
+    /// drop can be skipped); NULL means the check couldn't be made (never skip a channel on a failed check).</summary>
+    /// <param name="channelId">Channel id to query.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Active campaign ids on the channel, or null if the query failed.</returns>
+    Task<IReadOnlyCollection<string>?> FetchChannelDropCampaignIdsAsync(string channelId, CancellationToken ct = default);
+
     /// <summary>Benefits the user has already been awarded (Twitch's ~6-month claimed-drop history,
     /// from the inventory's gameEventDrops), mapped to when each was last awarded (null if unknown).
     /// Used to skip drops already claimed in the current campaign and, opt-in, de-dupe owned rewards.</summary>
@@ -399,6 +408,33 @@ public sealed class InventoryService : IInventoryService
         }
         catch (GqlAuthException) { throw; }
         catch { return (null, 0); }
+    }
+
+    /// <summary>Queries the drop campaigns Twitch reports active on a channel's current stream.</summary>
+    /// <param name="channelId">Channel id to query.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The active campaign ids, or null when the query fails.</returns>
+    public async Task<IReadOnlyCollection<string>?> FetchChannelDropCampaignIdsAsync(string channelId, CancellationToken ct = default)
+    {
+        try
+        {
+            var root = await _gql.PersistedAsync(
+                "DropsHighlightService_AvailableDrops", TwitchConstants.Gql.DropsHighlightServiceAvailableDrops,
+                new { channelID = channelId }, ct).ConfigureAwait(false);
+
+            var camps = root.Path("data", "channel")?.Prop("viewerDropCampaigns");
+            var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (camps?.ValueKind == JsonValueKind.Array)
+                foreach (var c in camps.Value.AsArray())
+                {
+                    var id = c.Str("id");
+                    if (!string.IsNullOrEmpty(id))
+                        ids.Add(id!);
+                }
+            return ids; // empty = channel has no drop active right now (not a failure)
+        }
+        catch (GqlAuthException) { throw; }
+        catch { return null; } // couldn't check - caller must NOT skip the channel on a null
     }
 
     /// <summary>Builds a drops-less DropsCampaign from a lightweight summary.</summary>

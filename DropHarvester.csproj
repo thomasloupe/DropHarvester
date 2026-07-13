@@ -42,12 +42,12 @@
 		     ApplicationVersion is a SEPARATE monotonically-increasing integer build counter (it maps
 		     to the macOS CFBundleVersion, where going backwards blocks a .pkg upgrade), so it does
 		     not track the semver and must only ever increase. -->
-		<ApplicationDisplayVersion>1.18.7</ApplicationDisplayVersion>
-		<ApplicationVersion>28070</ApplicationVersion>
-		<Version>1.18.7</Version>
-		<AssemblyVersion>1.18.7</AssemblyVersion>
-		<FileVersion>1.18.7</FileVersion>
-		<InformationalVersion>1.18.7</InformationalVersion>
+		<ApplicationDisplayVersion>1.18.8</ApplicationDisplayVersion>
+		<ApplicationVersion>28080</ApplicationVersion>
+		<Version>1.18.8</Version>
+		<AssemblyVersion>1.18.8</AssemblyVersion>
+		<FileVersion>1.18.8</FileVersion>
+		<InformationalVersion>1.18.8</InformationalVersion>
 
 		<!-- Unpackaged Windows app. -->
 		<WindowsPackageType>None</WindowsPackageType>
