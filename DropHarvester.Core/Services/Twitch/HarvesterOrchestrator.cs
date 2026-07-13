@@ -214,7 +214,14 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
     // calm banner and keep running so it resumes the instant Twitch restores crediting. Only used as the
     // fallback threshold when there are no backup transports to try first.
     const int OutageAfterMinutes = 12;
-    DateTimeOffset _lastCreditUtc = DateTimeOffset.UtcNow; // last time ANY watched drop advanced
+    DateTimeOffset _lastCreditUtc = DateTimeOffset.UtcNow;       // last time OUR TARGET drop advanced (stall clock)
+    // Outage clock: last time Twitch credited ANYTHING (our target advanced, OR the credit-check session
+    // advanced - proving Twitch's crediting pipeline is up even when it's not OUR exact target, e.g. we're
+    // parked on an event campaign whose specific tier isn't earning here). Keyed separately from the stall
+    // clock so being stuck on a locally-uncreditable campaign can't masquerade as a Twitch-wide outage.
+    DateTimeOffset _lastTwitchCreditUtc = DateTimeOffset.UtcNow;
+    string? _lastSessionDropId;   // last credit-check session drop id, to detect that session advancing
+    int _lastSessionMins;         // last credit-check session minutes
     bool _outageActive;
 
     // Self-healing watch transport (mirrors the community "rotate the watch method" design): if nothing
@@ -302,6 +309,9 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
         _channelCooldownUntil.Clear();
         _skipReasonLogged.Clear();
         _lastCreditUtc = DateTimeOffset.UtcNow; // don't inherit a stale "no credit" clock across restarts
+        _lastTwitchCreditUtc = DateTimeOffset.UtcNow;
+        _lastSessionDropId = null;
+        _lastSessionMins = 0;
         _rotating = false;
         _rotationStepMinutes = 0;
         _selfHealExhausted = false;
@@ -754,15 +764,21 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             await SyncInventorySafeAsync(ct).ConfigureAwait(false);
 
             // Report which drop Twitch says this account is progressing on THIS channel right now
-            // (dropCurrentSession). This is the ground-truth "is it actually crediting" signal - a live
-            // allow-listed stream not airing drop-eligible content reports nothing. Log-only for now, so we
-            // can confirm the query returns real drop ids before letting it drive benching.
+            // (dropCurrentSession). This is the ground-truth "is Twitch's crediting pipeline up" signal - a
+            // live allow-listed stream not airing drop-eligible content reports nothing.
             if (!string.IsNullOrEmpty(channel.Id))
             {
                 var (sessionDropId, sessionMins) = await _inventory.FetchCurrentSessionAsync(channel.Id!, ct).ConfigureAwait(false);
-                // Internal diagnostic only (dropCurrentSession is a stale/global value, not the real target) -
-                // Debug level so it stays in the debug server's /log but never spams the in-app Log.
-                Log(sessionDropId is null
+                // If Twitch's own session for this channel is ADVANCING (same drop, more minutes), its
+                // crediting pipeline is working RIGHT NOW - even if that drop isn't OUR target (we're parked
+                // on an event campaign whose specific tier doesn't credit here). Refresh the outage clock so
+                // that can't be misread as a Twitch-wide outage; the stall clock still handles our target.
+                if (!string.IsNullOrEmpty(sessionDropId)
+                    && sessionDropId == _lastSessionDropId && sessionMins > _lastSessionMins)
+                    _lastTwitchCreditUtc = DateTimeOffset.UtcNow;
+                _lastSessionDropId = sessionDropId;
+                _lastSessionMins = sessionMins;
+                Log(string.IsNullOrEmpty(sessionDropId)
                     ? $"Credit check on {channel.DisplayName} [{campaign.Game.Name}]: Twitch reports NO drop crediting (target {drop.Id})."
                     : $"Credit check on {channel.DisplayName} [{campaign.Game.Name}]: crediting drop {sessionDropId} at {sessionMins}m (target {drop.Id}).",
                     HarvesterLogLevel.Debug);
@@ -772,7 +788,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             // CheckStall first: it updates the credit clock (and OnConfirmedProgress) when minutes advance,
             // so the transport self-heal below reads a fresh "how long since a real credit" signal.
             var stallAction = CheckStall(drop);
-            EvaluateWatchHealth(channel, campaign);
+            EvaluateWatchHealth(channel);
             switch (stallAction)
             {
                 case StallAction.GiveUp:
@@ -939,29 +955,16 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
     /// of minutes to restore progress; if the whole pass fails, settle back on the known-good primary and
     /// raise the outage banner. A real credit (via <see cref="OnConfirmedProgress"/>) cancels all of this.</summary>
     /// <param name="channel">The channel currently being watched.</param>
-    /// <param name="campaign">The campaign being harvested (its link state gates outage detection).</param>
-    void EvaluateWatchHealth(TwitchChannel channel, DropsCampaign campaign)
+    void EvaluateWatchHealth(TwitchChannel channel)
     {
         if (!channel.Online)
             return;
 
-        // An UNLINKED (opt-in "harvest unlinked") campaign not crediting is EXPECTED - Twitch won't
-        // progress a drop for a program the account isn't linked to - so it must never be read as a
-        // Twitch-side outage or trigger transport rotation (a real outage stops LINKED campaigns too, and
-        // that's what the banner is for). Keep the credit clock fresh so the wasted-on-unlinked time
-        // doesn't carry a false "nothing crediting" streak into the next linked watch, and clear a banner
-        // that this very situation may have wrongly raised.
-        if (!campaign.Linked)
-        {
-            _lastCreditUtc = DateTimeOffset.UtcNow;
-            _rotating = false;
-            _rotationStepMinutes = 0;
-            _selfHealExhausted = false;
-            ClearOutage();
-            return;
-        }
-
-        var stalledMin = (DateTimeOffset.UtcNow - _lastCreditUtc).TotalMinutes;
+        // Outage/rotation keys off "how long since Twitch credited ANYTHING", NOT since our target advanced.
+        // So being parked on a campaign whose specific tier doesn't credit here (an unlinked event drop, a
+        // wrong channel) can't fake a Twitch-wide outage as long as Twitch is crediting some session; the
+        // stall clock (_lastCreditUtc) still benches our un-advancing target and moves us on.
+        var stalledMin = (DateTimeOffset.UtcNow - _lastTwitchCreditUtc).TotalMinutes;
 
         if (!_rotating)
         {
@@ -1019,6 +1022,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
     void OnConfirmedProgress()
     {
         _lastCreditUtc = DateTimeOffset.UtcNow;
+        _lastTwitchCreditUtc = DateTimeOffset.UtcNow; // our target advancing is also proof Twitch is crediting
         _watch.MarkCurrentGood();
         if (_rotating)
             Log($"Backup watch method '{_watch.CurrentTransport}' restored drop progress - staying on it.", HarvesterLogLevel.Debug);
