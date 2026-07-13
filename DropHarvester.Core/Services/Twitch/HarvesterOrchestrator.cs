@@ -577,16 +577,19 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
     // "Watch" click takes effect within a second or two instead of up to a full watch tick
     readonly SemaphoreSlim _wake = new(0, 1);
 
-    /// <summary>Signal the watch delay to return early (idempotent; never over-releases the semaphore).</summary>
+    /// <summary>Signal any wakeable delay (watch tick OR an idle wait) to return early, so a settings change
+    /// or manual action takes effect now instead of after the delay (idempotent; never over-releases).</summary>
     void Wake()
     {
         try { if (_wake.CurrentCount == 0) _wake.Release(); } catch { }
     }
 
-    /// <summary>Wait out the watch interval, but return early if <see cref="Wake"/> is signaled.</summary>
+    /// <summary>Wait out a delay, but return early if <see cref="Wake"/> is signaled. Used for BOTH the watch
+    /// tick and the main loop's idle waits, so a priority/exclude/unlinked edit (via <see cref="RequestRefresh"/>)
+    /// or a manual switch is picked up immediately rather than waiting out a multi-minute idle sleep.</summary>
     /// <param name="delay">Maximum time to wait.</param>
     /// <param name="ct">Cancels the wait on shutdown.</param>
-    async Task WatchDelayAsync(TimeSpan delay, CancellationToken ct)
+    async Task WakeableDelayAsync(TimeSpan delay, CancellationToken ct)
     {
         try { await _wake.WaitAsync(delay, ct).ConfigureAwait(false); }
         catch (OperationCanceledException) { }
@@ -609,6 +612,16 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
                     if (!await EnsureAuthAsync(ct).ConfigureAwait(false))
                         return;
 
+                    // A settings edit (priority / exclude / harvest-unlinked) requested a refresh while the
+                    // loop was idle: force a fresh discovery so the new lists take effect now. This matters
+                    // most for "harvest unlinked", which changes WHICH campaigns get fetched at all. (Mid-
+                    // harvest the same flag is handled in HarvestChannelAsync, which breaks its watch loop.)
+                    if (_refreshRequested)
+                    {
+                        _refreshRequested = false;
+                        _lastCampaignFetch = DateTimeOffset.MinValue;
+                    }
+
                     await EnsureCampaignsAsync(ct).ConfigureAwait(false);
                     await SweepClaimsAsync(ct).ConfigureAwait(false);
                     ReleaseOverrideIfFinished();
@@ -617,7 +630,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
                     {
                         SetActive(null, null, null, Loc.T("Status_NoDropsToHarvest"));
                         _bus.Publish(new AllDropsHarvestedEvent());
-                        await DelayAsync(TimeSpan.FromMinutes(5), ct).ConfigureAwait(false);
+                        await WakeableDelayAsync(TimeSpan.FromMinutes(5), ct).ConfigureAwait(false);
                         continue;
                     }
 
@@ -628,7 +641,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
                     {
                         SetActive(null, null, null, Loc.T("Status_WaitingForStream"));
                         QueueChannelRefresh(null, ct); // still show the harvestable games (offline) while waiting
-                        await DelayAsync(TimeSpan.FromMinutes(1), ct).ConfigureAwait(false);
+                        await WakeableDelayAsync(TimeSpan.FromMinutes(1), ct).ConfigureAwait(false);
                         continue;
                     }
 
@@ -646,7 +659,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
                     ReportConnection(false); // a run of these = Twitch down / connection lost
                     _bus.Publish(new HarvesterErrorEvent(ex.Message));
                     Log($"Connection to Twitch failed: {ex.Message} - retrying in 15s.", HarvesterLogLevel.Warn);
-                    await DelayAsync(TimeSpan.FromSeconds(15), ct).ConfigureAwait(false);
+                    await WakeableDelayAsync(TimeSpan.FromSeconds(15), ct).ConfigureAwait(false);
                 }
             }
         }
@@ -867,7 +880,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             if (!ReferenceEquals(FirstHarvestableDrop(campaign), drop))
                 continue;
 
-            await WatchDelayAsync(TwitchConstants.WatchInterval, ct).ConfigureAwait(false);
+            await WakeableDelayAsync(TwitchConstants.WatchInterval, ct).ConfigureAwait(false);
         }
     }
 
@@ -2369,15 +2382,6 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
         _lastNextUpCampaignId = next?.Id;
         _lastNextUpDropId = nextDrop?.Id;
         _bus.Publish(new NextUpEvent(next, nextDrop));
-    }
-
-    /// <summary>Delay for the given time, returning quietly if cancelled.</summary>
-    /// <param name="delay">How long to wait.</param>
-    /// <param name="ct">Cancels the wait on shutdown.</param>
-    static async Task DelayAsync(TimeSpan delay, CancellationToken ct)
-    {
-        try { await Task.Delay(delay, ct).ConfigureAwait(false); }
-        catch (OperationCanceledException) { }
     }
 
     /// <summary>Publish a log line on the event bus.</summary>
