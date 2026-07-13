@@ -191,6 +191,10 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
     const int ChannelCooldownMinutes = 10;
     // login -> time until which a stalled channel is skipped in selection
     readonly Dictionary<string, DateTimeOffset> _channelCooldownUntil = new(StringComparer.OrdinalIgnoreCase);
+    // channel id -> (when checked, active campaign ids or null on failure). Short-lived cache so re-probing
+    // a big allow-list on every re-pick doesn't hammer the AvailableDrops API for the same channels.
+    readonly Dictionary<string, (DateTimeOffset at, IReadOnlyCollection<string>? ids)> _channelDropsCache = new(StringComparer.OrdinalIgnoreCase);
+    static readonly TimeSpan ChannelDropsTtl = TimeSpan.FromMinutes(3);
     // channel id -> tracked channel subscribed for real-time stream up/down, so the Channels tab reacts
     // instantly instead of only on the periodic directory refresh
     readonly Dictionary<string, TwitchChannel> _watchedChannels = new(StringComparer.OrdinalIgnoreCase);
@@ -1873,7 +1877,14 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
     {
         if (string.IsNullOrEmpty(ch.Id))
             return true;
-        var available = await _inventory.FetchChannelDropCampaignIdsAsync(ch.Id!, ct).ConfigureAwait(false);
+        IReadOnlyCollection<string>? available;
+        if (_channelDropsCache.TryGetValue(ch.Id!, out var cached) && DateTimeOffset.UtcNow - cached.at < ChannelDropsTtl)
+            available = cached.ids;
+        else
+        {
+            available = await _inventory.FetchChannelDropCampaignIdsAsync(ch.Id!, ct).ConfigureAwait(false);
+            _channelDropsCache[ch.Id!] = (DateTimeOffset.UtcNow, available);
+        }
         if (available is null)
             return true; // couldn't check - never skip on a failed check
         if (available.Contains(campaign.Id) || siblings.Any(s => available.Contains(s.Id)))
