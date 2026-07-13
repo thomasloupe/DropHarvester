@@ -777,11 +777,14 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             {
                 case StallAction.GiveUp:
                     _skipDrops[drop.Id] = DateTimeOffset.UtcNow.AddMinutes(SkipRetryMinutes);
-                    // a tier stalled at ZERO for the whole give-up window whose reward was already awarded
-                    // within THIS campaign's window is almost certainly claimed with self permanently lagging
-                    // at 0 (Marbles shared-reward case the uniqueness guard can't resolve). Persist it claimed
-                    // so it isn't re-picked every session; a truly earnable tier would have advanced instead.
-                    if (drop.Benefits.Any(b => ClaimBelongsTo(b.MatchKey, campaign)))
+                    // A tier stalled at ZERO real watch-minutes for the whole give-up window whose reward was
+                    // already awarded within THIS campaign's window is almost certainly claimed with self
+                    // permanently lagging at 0 (the Marbles shared-reward case the uniqueness guard can't
+                    // resolve). Persist it claimed so it isn't re-picked. The RealCurrentMinutes==0 guard is
+                    // essential: a tier that HAS real progress (a Marbles 8h/10h coin tier at 361/480) shares
+                    // that reward too, but it's genuinely still being earned - marking it claimed off a
+                    // sibling tier's claim would strand it forever.
+                    if (drop.RealCurrentMinutes == 0 && drop.Benefits.Any(b => ClaimBelongsTo(b.MatchKey, campaign)))
                     {
                         RecordDropClaimed(drop, DateTimeOffset.UtcNow);
                         Log($"'{drop.RewardName}' [{campaign.Game.Name}] never progressed and its reward is already in your history for this campaign - marking it claimed so it isn't retried.", HarvesterLogLevel.Warn);
@@ -1104,7 +1107,8 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
         try
         {
             await _inventory.SyncInventoryAsync(_campaigns, ct).ConfigureAwait(false);
-            CaptureSelfClaimedDrops(); // lock in any tier self currently reports claimed, before it lags
+            CaptureSelfClaimedDrops();  // lock in any tier self currently reports claimed, before it lags
+            PurgeStaleLedgerClaims();   // ...and undo any tier wrongly marked claimed that's still in progress
         }
         catch (GqlAuthException) { throw; }
         catch (OperationCanceledException) { throw; }
@@ -1122,6 +1126,26 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             foreach (var d in c.Drops)
                 if (d.IsClaimed && !_claimedDropIds.Contains(d.Id))
                     RecordDropClaimed(d, now);
+    }
+
+    /// <summary>Undo a per-tier ledger "claimed" mark when Twitch shows that tier genuinely still IN PROGRESS
+    /// (real watch-minutes above 0 but below the requirement, and not claimed). A claimed tier never reads as
+    /// mid-progress, so this can only be a stale shared-reward mis-attribution (a Marbles coin tier marked
+    /// claimed off a sibling tier's claim, or a stall during a crediting outage) - clear it from the ledger so
+    /// the tier is harvested to completion instead of being stranded as "already earned".</summary>
+    void PurgeStaleLedgerClaims()
+    {
+        foreach (var c in _campaigns)
+            foreach (var d in c.Drops)
+                if (_claimedDropIds.Contains(d.Id)
+                    && !d.IsClaimed
+                    && d.RealCurrentMinutes > 0
+                    && d.RealCurrentMinutes < d.RequiredMinutes)
+                {
+                    _claimedDropIds.Remove(d.Id);
+                    _ledger.RemoveDrop(d.Id);
+                    Log($"'{d.RewardName}' [{c.Game.Name}] is still in progress on Twitch ({d.RealCurrentMinutes}/{d.RequiredMinutes} min) - clearing a stale 'claimed' mark so it resumes.", HarvesterLogLevel.Warn);
+                }
     }
 
     /// <summary>Claim every drop in the campaign that's ready, recording each claim in the ledger and
@@ -2255,6 +2279,9 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
                 _claimedDropIds.Clear();
                 foreach (var id in _ledger.Drops.Keys)
                     _claimedDropIds.Add(id);
+                // just-synced campaigns in hand: drop any per-tier claim the live data contradicts (a tier
+                // Twitch still shows mid-progress can't be claimed) so a stale mark doesn't strand a campaign
+                PurgeStaleLedgerClaims();
                 if (!_claimHistoryLogged && _claimedBenefits.Count > 0)
                 {
                     _claimHistoryLogged = true;

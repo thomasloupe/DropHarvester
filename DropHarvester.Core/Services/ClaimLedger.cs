@@ -27,6 +27,11 @@ public interface IClaimLedger
     /// over-attributes one claim to a sibling tier. Immune to Twitch's per-drop self lagging back to 0.</summary>
     void RecordDrop(string dropId, DateTimeOffset at);
 
+    /// <summary>Forget a per-tier drop claim - used to undo a stale mis-attribution when Twitch shows the
+    /// tier genuinely still in progress (a claimed tier never reads as mid-progress).</summary>
+    /// <param name="dropId">Drop-definition id to remove.</param>
+    void RemoveDrop(string dropId);
+
     /// <summary>Drop-definition id -> when we recorded it claimed. A snapshot copy.</summary>
     IReadOnlyDictionary<string, DateTimeOffset> Drops { get; }
 }
@@ -79,6 +84,19 @@ public sealed class ClaimLedger : IClaimLedger
                 return; // already have an earlier/equal claim time
             _drops[dropId] = at;
             Save();
+        }
+    }
+
+    /// <summary>Removes a per-tier drop claim if present, persisting the change.</summary>
+    /// <param name="dropId">Drop-definition id to forget; blank ids are ignored.</param>
+    public void RemoveDrop(string dropId)
+    {
+        if (string.IsNullOrEmpty(dropId))
+            return;
+        lock (_lock)
+        {
+            if (_drops.Remove(dropId))
+                Save();
         }
     }
 
