@@ -788,7 +788,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             // CheckStall first: it updates the credit clock (and OnConfirmedProgress) when minutes advance,
             // so the transport self-heal below reads a fresh "how long since a real credit" signal.
             var stallAction = CheckStall(drop);
-            EvaluateWatchHealth(channel);
+            EvaluateWatchHealth(channel, campaign);
             switch (stallAction)
             {
                 case StallAction.GiveUp:
@@ -955,15 +955,33 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
     /// of minutes to restore progress; if the whole pass fails, settle back on the known-good primary and
     /// raise the outage banner. A real credit (via <see cref="OnConfirmedProgress"/>) cancels all of this.</summary>
     /// <param name="channel">The channel currently being watched.</param>
-    void EvaluateWatchHealth(TwitchChannel channel)
+    /// <param name="campaign">The campaign being harvested.</param>
+    void EvaluateWatchHealth(TwitchChannel channel, DropsCampaign campaign)
     {
         if (!channel.Online)
             return;
 
-        // Outage/rotation keys off "how long since Twitch credited ANYTHING", NOT since our target advanced.
-        // So being parked on a campaign whose specific tier doesn't credit here (an unlinked event drop, a
-        // wrong channel) can't fake a Twitch-wide outage as long as Twitch is crediting some session; the
-        // stall clock (_lastCreditUtc) still benches our un-advancing target and moves us on.
+        // The outage banner means "your NORMAL (linked) drops aren't crediting - Twitch looks down". An
+        // UNLINKED opt-in ("harvest unlinked") campaign not crediting is NOT that: these event/participation
+        // drops are an unreliable gamble that often don't credit on an allow-listed channel not airing the
+        // live event, and Twitch reports no session for them (nothing to refresh the outage clock). A real
+        // outage still surfaces on the linked campaigns the harvester prioritizes. So while on an unlinked
+        // campaign, keep the outage clock fresh and clear a false banner - but DON'T touch the stall clock,
+        // so the give-up path still benches the un-crediting drop and moves us on.
+        if (!campaign.Linked)
+        {
+            _lastTwitchCreditUtc = DateTimeOffset.UtcNow;
+            _rotating = false;
+            _rotationStepMinutes = 0;
+            _selfHealExhausted = false;
+            ClearOutage();
+            return;
+        }
+
+        // Outage/rotation keys off "how long since Twitch credited ANYTHING" (our target advancing, OR the
+        // credit-check session advancing on a different drop), NOT just our target - so a linked campaign
+        // where Twitch is crediting some other tier can't fake a Twitch-wide outage. The stall clock
+        // (_lastCreditUtc) still benches our un-advancing target and moves us on.
         var stalledMin = (DateTimeOffset.UtcNow - _lastTwitchCreditUtc).TotalMinutes;
 
         if (!_rotating)
