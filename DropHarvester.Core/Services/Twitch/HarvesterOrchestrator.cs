@@ -1181,9 +1181,36 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
         var now = DateTimeOffset.UtcNow;
         foreach (var c in _campaigns)
             foreach (var d in c.Drops)
-                if (d.IsClaimed && !_claimedDropIds.Contains(d.Id))
+            {
+                if (_claimedDropIds.Contains(d.Id))
+                    continue;
+                if (d.IsClaimed)
                     RecordDropClaimed(d, now);
+                else if (IsEarnedBadgeOrEmote(d))
+                {
+                    // We just watched a badge/emote drop to its full requirement: Twitch auto-grants these
+                    // (no claim step, no reliable self.isClaimed) so meeting the watch time IS the earn.
+                    // Record it permanently NOW, before Twitch's flaky per-drop progress resets to 0 and
+                    // makes it look un-earned again - otherwise it would re-harvest every rediscovery.
+                    RecordDropClaimed(d, now);
+                    Log($"Earned {d.RewardTypeLabel.ToLowerInvariant()} '{d.RewardName}' [{c.Game.Name}] by watching its {d.RequiredMinutes} min - marking it done so it isn't harvested again.");
+                }
+            }
     }
+
+    /// <summary>A badge/emote drop we've watched to completion. Badge/emote rewards use Twitch's BADGE/EMOTE
+    /// distribution types: they're auto-granted the instant the watch requirement is met, with no separate
+    /// claim step, and Twitch's per-drop <c>self</c> (isClaimed / currentMinutesWatched) is unreliable for
+    /// them - it commonly never flips claimed and can reset the minutes to 0 after granting, and the reward
+    /// frequently never appears in <c>gameEventDrops</c>. So "watched to the required minutes" is the ONLY
+    /// dependable earn signal for these; we treat it as done ourselves and persist it, instead of grinding
+    /// the same badge forever the way an upstream miner that trusts Twitch's flags does.</summary>
+    /// <param name="d">The drop to test.</param>
+    static bool IsEarnedBadgeOrEmote(TimedDrop d)
+        => d.IsBadgeOrEmoteReward
+           && d.RequiredMinutes > 0
+           && d.SubRequirementMet
+           && d.CurrentMinutes >= d.RequiredMinutes;
 
     /// <summary>Undo a per-tier ledger "claimed" mark when Twitch shows that tier genuinely still IN PROGRESS
     /// (real watch-minutes above 0 but below the requirement, and not claimed). A claimed tier never reads as
@@ -1196,6 +1223,10 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             foreach (var d in c.Drops)
                 if (_claimedDropIds.Contains(d.Id)
                     && !d.IsClaimed
+                    // badge/emote minutes are exactly the unreliable signal we record around (Twitch resets
+                    // them to 0 or a partial value after auto-granting), so an earned badge must never be
+                    // un-recorded here - only genuine item tiers get their stale mark cleared
+                    && !d.IsBadgeOrEmoteReward
                     && d.RealCurrentMinutes > 0
                     && d.RealCurrentMinutes < d.RequiredMinutes)
                 {
@@ -2483,12 +2514,16 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             items.Add(new HarvestingQueueItem(
                 c.Id, c.Game.Name, c.Name, d?.RewardName, d?.RewardImageUrl,
                 ReferenceEquals(c, ActiveCampaign),
-                string.Equals(c.Id, _forcedCampaignId, StringComparison.OrdinalIgnoreCase)));
+                string.Equals(c.Id, _forcedCampaignId, StringComparison.OrdinalIgnoreCase),
+                c.RemainingMinutes)); // watch-time to finish this whole campaign
             if (items.Count >= 25)
                 break;
         }
         var ordered = items.OrderByDescending(i => i.IsActive).ToList();
-        _bus.Publish(new HarvestingQueueEvent(ordered, _forcedCampaignId is not null));
+        // total watch-time to clear the queue = the sum of each queued campaign's remaining time (campaigns
+        // are harvested one after another, so their finish times add up)
+        var totalMinutes = ordered.Sum(i => i.RemainingMinutes);
+        _bus.Publish(new HarvestingQueueEvent(ordered, _forcedCampaignId is not null, totalMinutes));
     }
 
     string? _lastNextUpCampaignId;

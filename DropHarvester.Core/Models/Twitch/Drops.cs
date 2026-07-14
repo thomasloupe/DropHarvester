@@ -149,6 +149,17 @@ public partial class TimedDrop : ObservableModel
     /// <summary>Reward name (falls back to the drop name).</summary>
     public string RewardName => Benefits.FirstOrDefault()?.Name ?? Name;
 
+    /// <summary>What KIND of reward this drop grants, for the type tag/legend on the cards: "EMOTE",
+    /// "BADGE", or "DROP" (an in-game item). Read from Twitch's benefit distributionType (verified live).
+    /// Emote wins if a drop ever bundled several kinds, then badge, else it's a normal item drop.</summary>
+    public string RewardTypeLabel =>
+        Benefits.Any(b => b.IsEmote) ? "EMOTE"
+        : Benefits.Any(b => b.IsBadge) ? "BADGE"
+        : "DROP";
+
+    /// <summary>Whether this drop grants a badge or emote (auto-granted, no claim step) rather than an item.</summary>
+    public bool IsBadgeOrEmoteReward => Benefits.Any(b => b.IsBadgeOrEmote);
+
     /// <summary>Reset the sub-minute countdown anchor and refresh derived properties when the authoritative watch-minutes change.</summary>
     /// <param name="value">The new authoritative watch-minute count.</param>
     partial void OnRealCurrentMinutesChanged(int value) { _watchAnchorUtc = DateTimeOffset.UtcNow; RaiseDerived(); }

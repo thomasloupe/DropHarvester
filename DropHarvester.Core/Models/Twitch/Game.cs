@@ -43,11 +43,20 @@ public sealed class Benefit
     public required string Name { get; init; }
     public string? ImageUrl { get; init; }
 
-    /// <summary>distributionType from Twitch: BADGE / EMOTE / DIRECT_ENTITLEMENT / UNKNOWN.</summary>
+    /// <summary>distributionType from Twitch: BADGE / EMOTE / DIRECT_ENTITLEMENT / UNKNOWN. Verified live
+    /// against Twitch: chat-badge rewards report "BADGE", emote rewards "EMOTE", and in-game items
+    /// "DIRECT_ENTITLEMENT" - so it's the authoritative signal for what KIND of reward a drop grants.</summary>
     public string DistributionType { get; init; } = "UNKNOWN";
 
-    public bool IsBadgeOrEmote =>
-        DistributionType is "BADGE" or "EMOTE";
+    /// <summary>A chat badge reward (Twitch grants it automatically, with no claim step).</summary>
+    public bool IsBadge => DistributionType is "BADGE";
+
+    /// <summary>An emote reward (Twitch grants it automatically, with no claim step).</summary>
+    public bool IsEmote => DistributionType is "EMOTE";
+
+    /// <summary>A badge or emote - both are auto-granted the instant the watch requirement is met, with no
+    /// separate claim step and unreliable per-drop progress, so they're handled differently from items.</summary>
+    public bool IsBadgeOrEmote => IsBadge || IsEmote;
 
     /// <summary>The id used to match a reward against the claim history. Matched DIRECTLY against
     /// gameEventDrops ids - the full benefit id (including any "_CUSTOM_ID_..." part) IS the reward

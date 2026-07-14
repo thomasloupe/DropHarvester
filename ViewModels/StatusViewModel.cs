@@ -125,6 +125,9 @@ public partial class StatusViewModel : ObservableViewModel
     [ObservableProperty] private string _activeDropRemainingText = "";
     [ObservableProperty] private bool _activeDropRequiresSubscription;
 
+    /// <summary>The active drop's reward-type tag ("EMOTE" / "BADGE" / "DROP"), shown next to its name.</summary>
+    [ObservableProperty] private string _activeDropTypeLabel = "";
+
     // "Up next" = the campaign the harvester will move to after the active one, plus its drops.
     [ObservableProperty] private bool _nextUpVisible;
     [ObservableProperty] private string _nextUpGameName = "-";
@@ -137,6 +140,10 @@ public partial class StatusViewModel : ObservableViewModel
     public ObservableCollection<HarvestingQueueItem> Queue { get; } = new UiObservableCollection<HarvestingQueueItem>();
     [ObservableProperty] private bool _queueVisible;
     [ObservableProperty] private bool _overrideActive;
+
+    /// <summary>Total watch-time left to clear the whole queue, e.g. "6h 12m" - shown next to the QUEUE
+    /// heading. Empty when the queue is empty.</summary>
+    [ObservableProperty] private string _queueTotalText = "";
 
     /// <summary>Remembered: while an override is active, let a campaign that newly appeared after the
     /// override AND ranks higher in the effective order (ending-soonest, availability, or priority list)
@@ -462,7 +469,7 @@ public partial class StatusViewModel : ObservableViewModel
                     _activeChannelLogin = null; CanWatchLive = false;
                     ActiveDropRemainingText = ""; CampaignRemainingText = "";
                     NextUpVisible = false; NextUpDrops.Clear(); NextUpCampaignId = null;
-                    Queue.Clear(); QueueVisible = false; OverrideActive = false;
+                    Queue.Clear(); QueueVisible = false; QueueTotalText = ""; OverrideActive = false;
                 }
                 break;
 
@@ -483,6 +490,7 @@ public partial class StatusViewModel : ObservableViewModel
                 Queue.Clear();
                 foreach (var it in q.Items) Queue.Add(it);
                 QueueVisible = q.Items.Count > 0;
+                QueueTotalText = q.TotalRemainingText;
                 OverrideActive = q.OverrideActive;
                 break;
 
@@ -586,6 +594,7 @@ public partial class StatusViewModel : ObservableViewModel
             ActiveDropRemainingText = "";
             ActiveDropImageUrl = null;
             ActiveDropRequiresSubscription = false;
+            ActiveDropTypeLabel = "";
             return;
         }
         ActiveDropName = drop.RewardName;
@@ -594,6 +603,7 @@ public partial class StatusViewModel : ObservableViewModel
         ActiveDropProgressText = drop.ProgressSummary;
         ActiveDropImageUrl = drop.RewardImageUrl;
         ActiveDropRequiresSubscription = drop.RequiresSubscription;
+        ActiveDropTypeLabel = drop.RewardTypeLabel;
     }
 
     /// <summary>Handles auth changes by syncing login state on the UI thread.</summary>

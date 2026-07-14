@@ -12,12 +12,33 @@
              BackgroundColor="{StaticResource DhBg}">
     <Grid RowDefinitions="Auto,Auto,Auto,*" Padding="16" RowSpacing="10">
 
-        <HorizontalStackLayout HorizontalOptions="End" Spacing="8">
-            <Button Text="{Binding ViewToggleText}" Style="{StaticResource GhostButton}"
-                    MinimumWidthRequest="120" Command="{Binding ToggleViewCommand}" />
-            <Button Text="{loc:Tr Campaigns_Refresh}" Style="{StaticResource GhostButton}"
-                    MinimumWidthRequest="120" Command="{Binding RefreshCommand}" />
-        </HorizontalStackLayout>
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <!-- Reward-type legend: what the colored tags on each drop mean. Any type can also require a SUB. -->
+            <FlexLayout Wrap="Wrap" AlignItems="Center" VerticalOptions="Center">
+                <Border BackgroundColor="{StaticResource DhBlue}" StrokeThickness="0" StrokeShape="RoundRectangle 4"
+                        Padding="5,1" Margin="0,0,6,4" VerticalOptions="Center">
+                    <Label Text="EMOTE" TextColor="White" FontSize="10" FontAttributes="Bold" />
+                </Border>
+                <Border BackgroundColor="{StaticResource DhGold}" StrokeThickness="0" StrokeShape="RoundRectangle 4"
+                        Padding="5,1" Margin="0,0,6,4" VerticalOptions="Center">
+                    <Label Text="BADGE" TextColor="White" FontSize="10" FontAttributes="Bold" />
+                </Border>
+                <Border BackgroundColor="{StaticResource DhGreen}" StrokeThickness="0" StrokeShape="RoundRectangle 4"
+                        Padding="5,1" Margin="0,0,6,4" VerticalOptions="Center">
+                    <Label Text="DROP" TextColor="White" FontSize="10" FontAttributes="Bold" />
+                </Border>
+                <Border BackgroundColor="#9146FF" StrokeThickness="0" StrokeShape="RoundRectangle 4"
+                        Padding="5,1" Margin="0,0,6,4" VerticalOptions="Center">
+                    <Label Text="{loc:Tr Badge_Sub}" TextColor="White" FontSize="10" FontAttributes="Bold" />
+                </Border>
+            </FlexLayout>
+            <HorizontalStackLayout Grid.Column="1" HorizontalOptions="End" Spacing="8" VerticalOptions="Center">
+                <Button Text="{Binding ViewToggleText}" Style="{StaticResource GhostButton}"
+                        MinimumWidthRequest="120" Command="{Binding ToggleViewCommand}" />
+                <Button Text="{loc:Tr Campaigns_Refresh}" Style="{StaticResource GhostButton}"
+                        MinimumWidthRequest="120" Command="{Binding RefreshCommand}" />
+            </HorizontalStackLayout>
+        </Grid>
 
         <!-- Filters -->
         <FlexLayout Grid.Row="1" Wrap="Wrap" JustifyContent="Start" AlignItems="Center">
@@ -120,7 +141,15 @@
                                                     <Image Source="{Binding RewardImageUrl}" Aspect="AspectFit" />
                                                 </Border>
                                                 <Grid Grid.Column="1" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" RowDefinitions="Auto,Auto,Auto">
-                                                    <Label Text="{Binding RewardName}" Style="{StaticResource Body}" FontSize="13" LineBreakMode="TailTruncation" />
+                                                    <HorizontalStackLayout Spacing="6">
+                                                        <!-- reward type tag: EMOTE / BADGE / DROP -->
+                                                        <Border BackgroundColor="{Binding RewardTypeLabel, Converter={StaticResource RewardTypeColor}}"
+                                                                StrokeThickness="0" StrokeShape="RoundRectangle 4" Padding="4,0" VerticalOptions="Center">
+                                                            <Label Text="{Binding RewardTypeLabel}" TextColor="White" FontSize="9" FontAttributes="Bold" />
+                                                        </Border>
+                                                        <Label Text="{Binding RewardName}" Style="{StaticResource Body}" FontSize="13"
+                                                               LineBreakMode="TailTruncation" VerticalOptions="Center" />
+                                                    </HorizontalStackLayout>
                                                     <Label Grid.Column="1" Text="{Binding ProgressSummary}" Style="{StaticResource Muted}" FontSize="12"
                                                            IsVisible="{Binding NotSubOnlyReward}" />
                                                     <Label Grid.Column="2" Text="{loc:Tr Campaigns_Claimed}" TextColor="{StaticResource DhGreen}" FontSize="12"
@@ -153,6 +182,11 @@
                                                     BackgroundColor="{StaticResource DhSurface2}" Stroke="{StaticResource DhBorder}"
                                                     StrokeThickness="1" StrokeShape="RoundRectangle 8">
                                                 <VerticalStackLayout Spacing="6">
+                                                    <!-- reward type tag: EMOTE / BADGE / DROP -->
+                                                    <Border BackgroundColor="{Binding RewardTypeLabel, Converter={StaticResource RewardTypeColor}}"
+                                                            StrokeThickness="0" StrokeShape="RoundRectangle 4" Padding="5,0" HorizontalOptions="Center">
+                                                        <Label Text="{Binding RewardTypeLabel}" TextColor="White" FontSize="9" FontAttributes="Bold" />
+                                                    </Border>
                                                     <Label Text="{Binding RewardName}" Style="{StaticResource Body}" FontSize="12"
                                                            HorizontalTextAlignment="Center" MaxLines="2" LineBreakMode="TailTruncation"
                                                            HeightRequest="34" />

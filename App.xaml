@@ -17,6 +17,7 @@
             <conv:StringNotEmptyConverter x:Key="StringNotEmpty" />
             <conv:IntIsZeroConverter x:Key="IntIsZero" />
             <conv:IntIsPositiveConverter x:Key="IntIsPositive" />
+            <conv:RewardTypeToColorConverter x:Key="RewardTypeColor" />
 
             <!-- ===== DropHarvester dark palette (Twitch purple accent) ===== -->
             <Color x:Key="DhBg">#0E0F13</Color>

@@ -56,14 +56,41 @@ public sealed record ActiveTargetEvent(TwitchChannel? Channel, DropsCampaign? Ca
 /// queued. Powers the Status tab's "Up next" preview.</summary>
 public sealed record NextUpEvent(DropsCampaign? Campaign, TimedDrop? Drop) : HarvesterEvent;
 
-/// <summary>One row of the harvesting queue (ordered harvestable campaigns) for the Status tab.</summary>
+/// <summary>One row of the harvesting queue (ordered harvestable campaigns) for the Status tab.
+/// <paramref name="RemainingMinutes"/> is the watch-time left to FINISH that whole campaign (its
+/// longest remaining tier), shown in its own column.</summary>
 public sealed record HarvestingQueueItem(
     string CampaignId, string Game, string CampaignName, string? DropName, string? DropImageUrl,
-    bool IsActive, bool IsOverride);
+    bool IsActive, bool IsOverride, int RemainingMinutes)
+{
+    /// <summary>The campaign's remaining watch-time as "Hh Mm" (or "Mm" under an hour); empty when none.</summary>
+    public string RemainingText => QueueTime.HoursMinutes(RemainingMinutes);
+}
 
 /// <summary>The full ordered harvesting queue + whether a manual campaign override is in effect. The user
-/// can click a row to force that campaign (override) and clear it to resume automatic selection.</summary>
-public sealed record HarvestingQueueEvent(IReadOnlyList<HarvestingQueueItem> Items, bool OverrideActive) : HarvesterEvent;
+/// can click a row to force that campaign (override) and clear it to resume automatic selection.
+/// <paramref name="TotalRemainingMinutes"/> is the sum of every queued campaign's remaining watch-time -
+/// i.e. how much watching is left to clear the whole queue.</summary>
+public sealed record HarvestingQueueEvent(
+    IReadOnlyList<HarvestingQueueItem> Items, bool OverrideActive, int TotalRemainingMinutes) : HarvesterEvent
+{
+    /// <summary>Total watch-time left across the queue as "Hh Mm" (or "Mm" under an hour); empty when none.</summary>
+    public string TotalRemainingText => QueueTime.HoursMinutes(TotalRemainingMinutes);
+}
+
+/// <summary>Formats a whole number of minutes as a compact "Hh Mm" (or "Mm" under an hour) for the queue's
+/// watch-time columns and total.</summary>
+internal static class QueueTime
+{
+    /// <summary>Format <paramref name="minutes"/> as "2h 15m" / "45m"; empty for zero or negative.</summary>
+    /// <param name="minutes">Whole minutes to format.</param>
+    public static string HoursMinutes(int minutes)
+    {
+        if (minutes <= 0) return "";
+        int h = minutes / 60, m = minutes % 60;
+        return h > 0 ? $"{h}h {m}m" : $"{m}m";
+    }
+}
 
 /// <summary>Websocket pool health for the Status tab.</summary>
 public sealed record WebsocketStatusEvent(int Shards, int Topics, bool AllConnected) : HarvesterEvent;
