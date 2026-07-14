@@ -75,7 +75,6 @@ public sealed class WindowsTrayService : ITrayService
         // "Start with the system".
         var startInTray = _settings.Settings.AutostartIntoTray
             || Environment.CommandLine.Contains("--tray", StringComparison.OrdinalIgnoreCase);
-        App.CrashLog("tray-start", new Exception($"cmdline=[{Environment.CommandLine}] setting={_settings.Settings.AutostartIntoTray} startInTray={startInTray}"));
         if (startInTray && _appWindow is not null)
         {
             _startHidden = true;

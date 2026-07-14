@@ -69,7 +69,12 @@ public static class MauiProgram
                     // Log (and survive) any unhandled XAML/binding exception on the UI thread.
                     app.UnhandledException += (_, e) =>
                     {
-                        App.CrashLog("WinUI", e.Exception);
+                        // Drag-to-reorder throws a benign COMException when the app runs elevated (Windows
+                        // blocks OLE drag/drop in elevated processes); the arrow buttons do the same reorder.
+                        // Swallow it without crash-logging so it doesn't flood crash.log - it isn't a fault.
+                        if (e.Exception is not System.Runtime.InteropServices.COMException com
+                            || !com.Message.Contains("Drag start failed", StringComparison.OrdinalIgnoreCase))
+                            App.CrashLog("WinUI", e.Exception);
                         e.Handled = true;
                     };
                 })

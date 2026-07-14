@@ -182,7 +182,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
     // candidate pool to "waiting for a stream" and need a restart - benched drops come back on their own.
     readonly Dictionary<string, DateTimeOffset> _skipDrops = new();
     const int GiveUpAfterMinutes = 15;
-    const int SkipRetryMinutes = 25; // how long a given-up drop stays benched before it's retried
+    const int SkipRetryMinutes = 30; // how long a given-up drop stays benched before it's retried
     // whether a drop is currently benched (its retry window hasn't passed yet)
     bool IsSkipped(string dropId) => _skipDrops.TryGetValue(dropId, out var until) && DateTimeOffset.UtcNow < until;
     // no progress on the CURRENT channel this long = it isn't crediting us -> bench it, try another
@@ -201,7 +201,8 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
     // game id -> live drops-enabled streamer count from the last channel gather, for availability-aware
     // ordering (capped at the gather's fetch limit, which is enough to tell scarce from plentiful)
     readonly Dictionary<string, int> _liveCountByGame = new(StringComparer.OrdinalIgnoreCase);
-    // last skip reason logged per game, so a passed-over campaign is explained once, not every retry
+    // last skip reason logged per campaign (name + game), so a passed-over campaign is explained once, not
+    // every retry - and each campaign of a multi-campaign game (e.g. Special Events) is named individually
     readonly Dictionary<string, string> _skipReasonLogged = new(StringComparer.OrdinalIgnoreCase);
     DateTimeOffset _lastPreemptCheck = DateTimeOffset.MinValue;
     // announced new-drop ids already seen (seeded silently on the first fetch, so no startup flood)
@@ -819,7 +820,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
                         var until = DateTimeOffset.UtcNow.AddMinutes(SkipRetryMinutes);
                         foreach (var d in campaign.Drops)
                             _skipDrops[d.Id] = until;
-                        Log($"No credit on any '{campaign.Name}' [{campaign.Game.Name}] drop after {GiveUpAfterMinutes} min across channels - benching the whole campaign for {SkipRetryMinutes} min and moving on (it stays in the list and retries later).", HarvesterLogLevel.Warn);
+                        Log($"No credit on any '{campaign.Name}' [{campaign.Game.Name}] drop after {GiveUpAfterMinutes} min across channels - Ignoring campaign for {SkipRetryMinutes} min", HarvesterLogLevel.Warn);
                     }
                     else
                         // made real progress then stalled - keep the global "no progress" banner until something advances
@@ -1303,7 +1304,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             Log($"Can't watch {forced.DisplayName} right now (offline, or nothing left to harvest for {forced.Game?.Name}) - continuing with the normal order.");
         }
 
-        var skips = new List<(string game, string reason)>(); // games passed over, in order
+        var skips = new List<(string game, string label, string reason)>(); // campaigns passed over, in order
         var pick = await WalkForWatchableAsync(CandidateCampaigns(), skips, ct).ConfigureAwait(false);
 
         // the override target has no live stream right now: rather than sit idle, harvest the best OTHER
@@ -1317,7 +1318,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             if (fallback is { } fb)
             {
                 Log($"Override target has no live stream right now - harvesting {fb.campaign.Game.Name} meanwhile; resuming the override once it's back online.");
-                ClearSkip(fb.campaign.Game.Name);
+                ClearSkip(SkipLabel(fb.campaign));
                 return fb;
             }
         }
@@ -1325,7 +1326,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
         if (pick is { } p)
         {
             LogSkips(skips, exceptGame: p.campaign.Game.Name);
-            ClearSkip(p.campaign.Game.Name);
+            ClearSkip(SkipLabel(p.campaign));
             return p;
         }
 
@@ -1340,7 +1341,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
     /// <param name="skips">Accumulates the games passed over and why, for the caller to log.</param>
     /// <param name="ct">Cancels the lookups on shutdown.</param>
     async Task<(DropsCampaign campaign, TwitchChannel channel, TimedDrop drop)?> WalkForWatchableAsync(
-        IEnumerable<DropsCampaign> candidates, List<(string game, string reason)> skips, CancellationToken ct)
+        IEnumerable<DropsCampaign> candidates, List<(string game, string label, string reason)> skips, CancellationToken ct)
     {
         foreach (var campaign in candidates)
         {
@@ -1352,7 +1353,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
                 // a finished campaign (all drops claimed/earned) isn't a "skip" worth announcing - it
                 // belongs in Finished and is silently ignored
                 if (!IsCampaignFinishedForHarvesting(campaign))
-                    skips.Add((game, reason));
+                    skips.Add((game, SkipLabel(campaign), reason));
                 continue;
             }
 
@@ -1363,9 +1364,9 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             var channel = await ChooseChannelAsync(campaign, ct).ConfigureAwait(false);
             if (channel is null)
             {
-                skips.Add((game, campaign.AllowedChannels.Count > 0
-                    ? "its official channel(s) are offline"
-                    : "no streams online"));
+                skips.Add((game, SkipLabel(campaign), campaign.AllowedChannels.Count > 0
+                    ? "no official channel is live with this drop right now"
+                    : "no live channels online right now"));
                 continue;
             }
 
@@ -1411,36 +1412,42 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
                                                  // a sub-gated drop we can't meet doesn't keep the campaign "open"
                                                  || !d.SubRequirementMet);
 
-    /// <summary>Log each skipped game's reason once (deduped by game within this pass, and again by
-    /// (game, reason) across passes via <see cref="_skipReasonLogged"/>), so the log isn't spammed.</summary>
-    /// <param name="skips">The (game, reason) pairs passed over this pass, in order.</param>
+    /// <summary>A skip line's subject: the campaign name plus its game, so a game with several concurrent
+    /// campaigns (e.g. "Special Events" = EWC + Football Fest) is never ambiguous about WHICH one was
+    /// passed over.</summary>
+    /// <param name="c">The campaign being skipped.</param>
+    static string SkipLabel(DropsCampaign c) => $"{c.Name.Trim()} [{c.Game.Name}]";
+
+    /// <summary>Log each skipped campaign's reason once (deduped by campaign within this pass, and again by
+    /// (campaign, reason) across passes via <see cref="_skipReasonLogged"/>), so the log isn't spammed.</summary>
+    /// <param name="skips">The (game, label, reason) tuples passed over this pass, in order.</param>
     /// <param name="exceptGame">A game to omit (the one actually being watched), or null for none.</param>
-    void LogSkips(List<(string game, string reason)> skips, string? exceptGame)
+    void LogSkips(List<(string game, string label, string reason)> skips, string? exceptGame)
     {
         var done = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (game, reason) in skips)
+        foreach (var (game, label, reason) in skips)
         {
             if (exceptGame is not null && game.Equals(exceptGame, StringComparison.OrdinalIgnoreCase))
                 continue;
-            if (done.Add(game))
-                LogSkip(game, reason);
+            if (done.Add(label))
+                LogSkip(label, reason);
         }
     }
 
-    /// <summary>Log a game's skip reason, suppressing a repeat of the same reason for that game.</summary>
-    /// <param name="game">The game being skipped.</param>
+    /// <summary>Log a campaign's skip reason, suppressing a repeat of the same reason for that campaign.</summary>
+    /// <param name="label">The campaign being skipped (name + game).</param>
     /// <param name="reason">Why it's skipped.</param>
-    void LogSkip(string game, string reason)
+    void LogSkip(string label, string reason)
     {
-        if (_skipReasonLogged.TryGetValue(game, out var prev) && prev == reason)
+        if (_skipReasonLogged.TryGetValue(label, out var prev) && prev == reason)
             return; // same reason already reported; don't repeat every tick
-        _skipReasonLogged[game] = reason;
-        Log($"Skipping {game}: {reason}.");
+        _skipReasonLogged[label] = reason;
+        Log($"Skipping {label}: {reason}.");
     }
 
-    /// <summary>Forget the last-logged skip reason for a game, so its next skip logs again.</summary>
-    /// <param name="game">The game to reset.</param>
-    void ClearSkip(string game) => _skipReasonLogged.Remove(game);
+    /// <summary>Forget the last-logged skip reason for a campaign, so its next skip logs again.</summary>
+    /// <param name="label">The campaign to reset (name + game).</param>
+    void ClearSkip(string label) => _skipReasonLogged.Remove(label);
 
     /// <summary>Null when the campaign has a drop we can harvest right now (eligible + an unharvested,
     /// not-owned, finishable drop); otherwise a short human reason it's skipped. Mirrors the filters
