@@ -41,6 +41,7 @@ public static partial class LocStrings
         ["Status_UpNext"] = "ALS NÄCHSTES",
         ["Status_Queue"] = "WARTESCHLANGE",
         ["Status_RemoveOverride"] = "Manuelle Auswahl entfernen",
+        ["Status_Overriding"] = "Wird überschrieben...",
         ["Status_AllowNewHigherPriority"] = "Neuen Kampagnen mit höherer Priorität erlauben, diese manuelle Auswahl zu beenden",
 
         // ----- Settings: language -----

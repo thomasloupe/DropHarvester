@@ -31,6 +31,10 @@ public interface IHarvesterOrchestrator
     bool IsRefreshingChannels { get; }
     event Action? ChannelRefreshStateChanged;
 
+    /// <summary>Force an immediate refresh of the Channels tab's channel list (the tab's manual refresh
+    /// button), bypassing the periodic throttle. No-op when harvesting isn't running.</summary>
+    void RequestChannelRefresh();
+
     /// <summary>Raised when the preferred/avoided channel lists change (so Settings can refresh).</summary>
     event Action? ChannelPreferencesChanged;
 
@@ -376,6 +380,10 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
         _overrideSetUtc = DateTimeOffset.UtcNow; // the "released after this = new" cutoff for yielding
         _switchRequested = true; // re-pick now, honoring the override
         Wake();
+        // republish the queue right away so the clicked row immediately reads as the override target
+        // (IsOverride) - the UI shows "Overriding..." on it until the loop actually switches to it, instead
+        // of no feedback at all between the click and the (async) switch
+        PublishQueue();
         Log(dropOnly
             ? "Manual override: harvesting the chosen campaign's next drop, then resuming automatic selection."
             : "Manual override: harvesting only the chosen campaign until you remove the override.");
@@ -844,6 +852,18 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             // completed elsewhere (or whose claim instance only just became available) is never left behind
             await ClaimAllReadyAsync(ct).ConfigureAwait(false);
 
+            // A tier can finish a few seconds BEFORE Twitch issues its claim instance (dropInstanceID lags the
+            // final minute-watched). Rather than wait a whole watch interval to claim it, do one short
+            // sync-only retry - NO extra heartbeat, which would over-report watch time - so it's claimed within
+            // seconds instead of ~a minute. Badge/emote and already-ledgered drops never get a claim instance,
+            // so they're excluded (else this would fire every tick on their permanent complete-unclaimed state).
+            if (campaign.Drops.Any(d => d.IsComplete && !d.IsClaimed && !d.IsBadgeOrEmoteReward && !WeClaimedDrop(d)))
+            {
+                await WakeableDelayAsync(TimeSpan.FromSeconds(6), ct).ConfigureAwait(false);
+                await SyncInventorySafeAsync(ct).ConfigureAwait(false);
+                await ClaimAllReadyAsync(ct).ConfigureAwait(false);
+            }
+
             if (Settings.AutoClaimChannelPoints)
             {
                 try
@@ -1274,9 +1294,11 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
         }
         if (campaign.IsFinished)
             _bus.Publish(new CampaignCompletedEvent(campaign));
-        if (claimedAny)
-            // refresh inventory/claim-history on the next target pick: a claim can unlock the next drop
-            // and updates what's already owned
+        if (claimedAny && !campaign.IsFinished)
+            // a MID-campaign claim can unlock the next tier / precondition drop, so force a fresh discovery
+            // on the next pick to surface it. A FULLY-finished campaign has nothing left to unlock here, so we
+            // skip that (often slow, on a big campaign list) re-discovery and move straight to the next
+            // campaign instead of sitting on the finished one while a full re-fetch runs.
             _lastCampaignFetch = DateTimeOffset.MinValue;
     }
 
@@ -1915,6 +1937,15 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
     {
         if (string.IsNullOrEmpty(ch.Id))
             return true;
+        // The AvailableDrops gate exists for UNLINKED event campaigns (Special Events) whose broad allow-list
+        // includes channels merely TAGGED for the event but not actually airing the drop (agorafutbol). For a
+        // LINKED campaign the allow-list IS the curated official drop-channel set, and Twitch's AvailableDrops
+        // notoriously OMITS the campaign on co-streams / esports channels that still credit it (the CDL
+        // Championship on callofduty_esports - a live, DropsEnabled co-stream that credited us yet reported no
+        // available drops, leaving the harvester idle). So trust a live official channel of a linked campaign
+        // and never skip it here; if it isn't really crediting, the stall/give-up path benches it and moves on.
+        if (campaign.Linked)
+            return true;
         IReadOnlyCollection<string>? available;
         if (_channelDropsCache.TryGetValue(ch.Id!, out var cached) && DateTimeOffset.UtcNow - cached.at < ChannelDropsTtl)
             available = cached.ids;
@@ -2059,6 +2090,15 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             return;
         _lastChannelRefresh = DateTimeOffset.UtcNow;
         _ = RefreshChannelsSafeAsync(active, ct);
+    }
+
+    /// <summary>Force an on-demand channel-list refresh (the Channels tab button), bypassing the throttle.
+    /// No-op if harvesting isn't running (there's no session token / nothing to gather).</summary>
+    public void RequestChannelRefresh()
+    {
+        if (_cts is not { } cts)
+            return;
+        QueueChannelRefresh(ActiveChannel, cts.Token, force: true);
     }
 
     /// <summary>Run the tracked-channels refresh, swallowing any failure (the list is best-effort).</summary>

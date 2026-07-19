@@ -41,6 +41,7 @@ public static partial class LocStrings
         ["Status_UpNext"] = "다음 차례",
         ["Status_Queue"] = "대기열",
         ["Status_RemoveOverride"] = "재정의 제거",
+        ["Status_Overriding"] = "재정의 중...",
         ["Status_AllowNewHigherPriority"] = "우선순위가 더 높은 새 캠페인이 이 재정의를 종료하도록 허용",
 
         // ----- Settings: language -----

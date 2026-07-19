@@ -41,6 +41,7 @@ public static partial class LocStrings
         ["Status_UpNext"] = "ДАЛЕЕ",
         ["Status_Queue"] = "ОЧЕРЕДЬ",
         ["Status_RemoveOverride"] = "Убрать переопределение",
+        ["Status_Overriding"] = "Переопределение...",
         ["Status_AllowNewHigherPriority"] = "Разрешить новым кампаниям с более высоким приоритетом завершить это переопределение",
 
         // ----- Settings: language -----

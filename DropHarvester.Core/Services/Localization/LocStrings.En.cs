@@ -42,6 +42,7 @@ public static partial class LocStrings
         ["Status_UpNext"] = "UP NEXT",
         ["Status_Queue"] = "QUEUE",
         ["Status_RemoveOverride"] = "Remove override",
+        ["Status_Overriding"] = "Overriding...",
         ["Status_AllowNewHigherPriority"] = "Allow new higher priority campaigns to end this override",
 
         // ----- Settings: language -----

@@ -12,7 +12,7 @@
              BackgroundColor="{StaticResource DhBg}">
     <Grid RowDefinitions="Auto,*" Padding="16" RowSpacing="8">
 
-        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="10">
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
             <Label Padding="4,0,0,0" Style="{StaticResource Muted}" FontSize="12" VerticalOptions="Center"
                    Text="{Binding CountText}" />
             <HorizontalStackLayout Grid.Column="1" Spacing="6" VerticalOptions="Center" IsVisible="{Binding IsRefreshing}">
@@ -20,6 +20,9 @@
                                    WidthRequest="16" HeightRequest="16" />
                 <Label Text="{loc:Tr Channels_Updating}" Style="{StaticResource Muted}" FontSize="12" VerticalOptions="Center" />
             </HorizontalStackLayout>
+            <Button Grid.Column="2" Text="{loc:Tr Campaigns_Refresh}" Style="{StaticResource GhostButton}"
+                    MinimumWidthRequest="110" Command="{Binding RefreshCommand}"
+                    IsEnabled="{Binding IsRefreshing, Converter={StaticResource InvertBool}}" />
         </Grid>
 
         <CollectionView Grid.Row="1" ItemsSource="{Binding Groups}">

@@ -159,6 +159,10 @@ public partial class ChannelsViewModel : ObservableViewModel
             target.RemoveAt(target.Count - 1);
     }
 
+    /// <summary>Force an immediate refresh of the channel list (the tab's Refresh button).</summary>
+    [RelayCommand]
+    void Refresh() => _harvester.RequestChannelRefresh();
+
     /// <summary>Toggles a game group's expand/collapse state and remembers it for future rebuilds.</summary>
     /// <param name="group">The group to toggle; ignored when null.</param>
     [RelayCommand]

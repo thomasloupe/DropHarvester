@@ -290,11 +290,14 @@
                                            IsVisible="{Binding RemainingText, Converter={StaticResource StringNotEmpty}}" />
                                     <Label Grid.Column="3" Text="{loc:Tr Common_Harvesting}" TextColor="{StaticResource DhAccent}" FontAttributes="Bold"
                                            FontSize="12" VerticalOptions="Center" IsVisible="{Binding IsActive}" />
+                                    <!-- override clicked but not yet switched: feedback while it's coming up -->
+                                    <Label Grid.Column="3" Text="{loc:Tr Status_Overriding}" TextColor="{StaticResource DhGold}" FontAttributes="Bold"
+                                           FontSize="12" VerticalOptions="Center" IsVisible="{Binding IsOverridePending}" />
                                     <Button Grid.Column="3" Text="{loc:Tr Common_Harvest}" Style="{StaticResource GhostButton}"
                                             MinimumWidthRequest="80" HeightRequest="34"
                                             Command="{Binding Source={x:Reference Root}, Path=BindingContext.HarvestCampaignCommand}"
                                             CommandParameter="{Binding CampaignId}"
-                                            IsVisible="{Binding IsActive, Converter={StaticResource InvertBool}}" />
+                                            IsVisible="{Binding CanHarvest}" />
                                 </Grid>
                             </DataTemplate>
                         </CollectionView.ItemTemplate>

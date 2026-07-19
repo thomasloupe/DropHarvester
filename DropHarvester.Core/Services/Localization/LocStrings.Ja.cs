@@ -41,6 +41,7 @@ public static partial class LocStrings
         ["Status_UpNext"] = "次の予定",
         ["Status_Queue"] = "キュー",
         ["Status_RemoveOverride"] = "上書きを解除",
+        ["Status_Overriding"] = "上書き中...",
         ["Status_AllowNewHigherPriority"] = "より優先度の高い新しいキャンペーンでこの上書きを終了できるようにする",
 
         // ----- Settings: language -----

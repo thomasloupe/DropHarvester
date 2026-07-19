@@ -65,6 +65,13 @@ public sealed record HarvestingQueueItem(
 {
     /// <summary>The campaign's remaining watch-time as "Hh Mm" (or "Mm" under an hour); empty when none.</summary>
     public string RemainingText => QueueTime.HoursMinutes(RemainingMinutes);
+
+    /// <summary>This row is the chosen override but isn't the active watch YET - the UI shows "Overriding..."
+    /// on it as feedback between the click and the switch actually taking effect.</summary>
+    public bool IsOverridePending => IsOverride && !IsActive;
+
+    /// <summary>Show this row's "Harvest" (override) button: it's neither the active watch nor the pending override.</summary>
+    public bool CanHarvest => !IsActive && !IsOverride;
 }
 
 /// <summary>The full ordered harvesting queue + whether a manual campaign override is in effect. The user

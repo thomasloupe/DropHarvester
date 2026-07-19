@@ -41,6 +41,7 @@ public static partial class LocStrings
         ["Status_UpNext"] = "A CONTINUACIÓN",
         ["Status_Queue"] = "COLA",
         ["Status_RemoveOverride"] = "Quitar anulación",
+        ["Status_Overriding"] = "Anulando...",
         ["Status_AllowNewHigherPriority"] = "Permitir que nuevas campañas de mayor prioridad terminen esta anulación",
 
         // ----- Settings: language -----

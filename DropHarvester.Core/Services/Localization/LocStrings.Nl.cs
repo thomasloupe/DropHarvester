@@ -41,6 +41,7 @@ public static partial class LocStrings
         ["Status_UpNext"] = "VOLGENDE",
         ["Status_Queue"] = "WACHTRIJ",
         ["Status_RemoveOverride"] = "Overschrijving verwijderen",
+        ["Status_Overriding"] = "Overschrijven...",
         ["Status_AllowNewHigherPriority"] = "Nieuwe campagnes met hogere prioriteit deze overschrijving laten beëindigen",
 
         // ----- Settings: language -----

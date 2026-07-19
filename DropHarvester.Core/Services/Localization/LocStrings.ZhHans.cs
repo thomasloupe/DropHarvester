@@ -41,6 +41,7 @@ public static partial class LocStrings
         ["Status_UpNext"] = "接下来",
         ["Status_Queue"] = "队列",
         ["Status_RemoveOverride"] = "移除覆盖",
+        ["Status_Overriding"] = "覆盖中...",
         ["Status_AllowNewHigherPriority"] = "允许新的更高优先级活动结束此覆盖",
 
         // ----- Settings: language -----
