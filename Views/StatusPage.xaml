@@ -305,13 +305,6 @@
                 </VerticalStackLayout>
             </Border>
 
-            <!-- ===== Footer: version + "View Changes" changelog popup ===== -->
-            <HorizontalStackLayout HorizontalOptions="Center" Spacing="10" Margin="0,4,0,0">
-                <Label Text="{Binding VersionText}" Style="{StaticResource Muted}" FontSize="12" VerticalOptions="Center" />
-                <Button Text="{loc:Tr Changelog_ViewChanges}" Style="{StaticResource GhostButton}"
-                        MinimumWidthRequest="120" Command="{Binding ViewChangesCommand}" />
-            </HorizontalStackLayout>
-
         </VerticalStackLayout>
     </ScrollView>
 </ContentPage>

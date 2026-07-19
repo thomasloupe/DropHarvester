@@ -1,5 +1,9 @@
 [
   {
+    "version": "1.22.1",
+    "notes": "CHANGE: Removed the version/View Changes line from the bottom of the Status page. View Changes stays on the Settings page."
+  },
+  {
     "version": "1.22.0",
     "notes": "NEW: When a newer version is available, the View Changes popup shows an Update button pinned at the bottom, with live download progress and speed, so you can update straight from the changelog."
   },
