@@ -47,6 +47,9 @@ public static partial class LocStrings
         ["Changelog_YouAreHere"] = "你在这里",
         ["Changelog_Latest"] = "最新",
         ["Changelog_Unavailable"] = "变更日志不可用。",
+        ["Changelog_Update"] = "更新",
+        ["Changelog_Updating"] = "更新中... {0}",
+        ["Changelog_Restarting"] = "正在重启...",
         ["Status_AllowNewHigherPriority"] = "允许新的更高优先级活动结束此覆盖",
 
         // ----- Settings: language -----

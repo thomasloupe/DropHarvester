@@ -48,6 +48,9 @@ public static partial class LocStrings
         ["Changelog_YouAreHere"] = "YOU ARE HERE",
         ["Changelog_Latest"] = "LATEST",
         ["Changelog_Unavailable"] = "Changelog unavailable.",
+        ["Changelog_Update"] = "Update",
+        ["Changelog_Updating"] = "Updating... {0}",
+        ["Changelog_Restarting"] = "Restarting...",
         ["Status_AllowNewHigherPriority"] = "Allow new higher priority campaigns to end this override",
 
         // ----- Settings: language -----

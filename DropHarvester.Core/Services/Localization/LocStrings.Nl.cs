@@ -47,6 +47,9 @@ public static partial class LocStrings
         ["Changelog_YouAreHere"] = "JE BENT HIER",
         ["Changelog_Latest"] = "NIEUWSTE",
         ["Changelog_Unavailable"] = "Wijzigingslogboek niet beschikbaar.",
+        ["Changelog_Update"] = "Bijwerken",
+        ["Changelog_Updating"] = "Bijwerken... {0}",
+        ["Changelog_Restarting"] = "Opnieuw opstarten...",
         ["Status_AllowNewHigherPriority"] = "Nieuwe campagnes met hogere prioriteit deze overschrijving laten beëindigen",
 
         // ----- Settings: language -----

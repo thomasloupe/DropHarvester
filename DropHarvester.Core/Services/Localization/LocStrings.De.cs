@@ -47,6 +47,9 @@ public static partial class LocStrings
         ["Changelog_YouAreHere"] = "DU BIST HIER",
         ["Changelog_Latest"] = "NEUESTE",
         ["Changelog_Unavailable"] = "Änderungsprotokoll nicht verfügbar.",
+        ["Changelog_Update"] = "Aktualisieren",
+        ["Changelog_Updating"] = "Wird aktualisiert... {0}",
+        ["Changelog_Restarting"] = "Wird neu gestartet...",
         ["Status_AllowNewHigherPriority"] = "Neuen Kampagnen mit höherer Priorität erlauben, diese manuelle Auswahl zu beenden",
 
         // ----- Settings: language -----

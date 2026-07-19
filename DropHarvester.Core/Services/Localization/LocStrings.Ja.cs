@@ -47,6 +47,9 @@ public static partial class LocStrings
         ["Changelog_YouAreHere"] = "使用中",
         ["Changelog_Latest"] = "最新",
         ["Changelog_Unavailable"] = "変更履歴を利用できません。",
+        ["Changelog_Update"] = "更新",
+        ["Changelog_Updating"] = "更新中... {0}",
+        ["Changelog_Restarting"] = "再起動中...",
         ["Status_AllowNewHigherPriority"] = "より優先度の高い新しいキャンペーンでこの上書きを終了できるようにする",
 
         // ----- Settings: language -----

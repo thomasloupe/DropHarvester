@@ -47,6 +47,9 @@ public static partial class LocStrings
         ["Changelog_YouAreHere"] = "VOUS ÊTES ICI",
         ["Changelog_Latest"] = "DERNIÈRE",
         ["Changelog_Unavailable"] = "Journal des modifications indisponible.",
+        ["Changelog_Update"] = "Mettre à jour",
+        ["Changelog_Updating"] = "Mise à jour... {0}",
+        ["Changelog_Restarting"] = "Redémarrage...",
         ["Status_AllowNewHigherPriority"] = "Autoriser les nouvelles campagnes plus prioritaires à mettre fin à ce forçage",
 
         // ----- Settings: language -----

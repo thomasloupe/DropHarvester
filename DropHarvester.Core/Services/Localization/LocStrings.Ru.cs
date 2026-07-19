@@ -47,6 +47,9 @@ public static partial class LocStrings
         ["Changelog_YouAreHere"] = "ВЫ ЗДЕСЬ",
         ["Changelog_Latest"] = "ПОСЛЕДНЯЯ",
         ["Changelog_Unavailable"] = "Журнал изменений недоступен.",
+        ["Changelog_Update"] = "Обновить",
+        ["Changelog_Updating"] = "Обновление... {0}",
+        ["Changelog_Restarting"] = "Перезапуск...",
         ["Status_AllowNewHigherPriority"] = "Разрешить новым кампаниям с более высоким приоритетом завершить это переопределение",
 
         // ----- Settings: language -----

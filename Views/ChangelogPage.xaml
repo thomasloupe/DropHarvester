@@ -24,7 +24,7 @@
                 <TapGestureRecognizer />
             </Border.GestureRecognizers>
 
-            <Grid RowDefinitions="Auto,*" Padding="18" RowSpacing="12">
+            <Grid RowDefinitions="Auto,*,Auto" Padding="18" RowSpacing="12">
 
                 <!-- Header -->
                 <Grid ColumnDefinitions="*,Auto">
@@ -67,6 +67,12 @@
                         </DataTemplate>
                     </CollectionView.ItemTemplate>
                 </CollectionView>
+
+                <!-- Pinned below the scroll area: only shown when a newer version is available -->
+                <Button Grid.Row="2" Text="{Binding UpdateButtonText}" Style="{StaticResource PrimaryButton}"
+                        IsVisible="{Binding UpdateAvailable}"
+                        IsEnabled="{Binding Updating, Converter={StaticResource InvertBool}}"
+                        Command="{Binding UpdateCommand}" />
 
             </Grid>
         </Border>

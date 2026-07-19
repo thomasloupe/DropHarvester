@@ -47,6 +47,9 @@ public static partial class LocStrings
         ["Changelog_YouAreHere"] = "현재 버전",
         ["Changelog_Latest"] = "최신",
         ["Changelog_Unavailable"] = "변경 로그를 사용할 수 없습니다.",
+        ["Changelog_Update"] = "업데이트",
+        ["Changelog_Updating"] = "업데이트 중... {0}",
+        ["Changelog_Restarting"] = "다시 시작 중...",
         ["Status_AllowNewHigherPriority"] = "우선순위가 더 높은 새 캠페인이 이 재정의를 종료하도록 허용",
 
         // ----- Settings: language -----
