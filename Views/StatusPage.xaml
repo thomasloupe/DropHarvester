@@ -49,7 +49,15 @@
             <Border Style="{StaticResource Card}">
                 <VerticalStackLayout Spacing="14">
                     <Label Text="{loc:Tr Status_Account}" Style="{StaticResource SectionLabel}" />
-                    <Label Text="{Binding AccountLine}" Style="{StaticResource Body}" FontSize="16" />
+                    <!-- "Logged in" then the username/id, hidden behind an eyeball toggle (default hidden) -->
+                    <HorizontalStackLayout Spacing="8" VerticalOptions="Center">
+                        <Label Text="{Binding AccountLine}" Style="{StaticResource Body}" FontSize="16" VerticalOptions="Center" />
+                        <Label Text="{Binding AccountDetail}" Style="{StaticResource Body}" FontSize="16"
+                               VerticalOptions="Center" IsVisible="{Binding IsLoggedIn}" />
+                        <ImageButton Source="{Binding EyeIcon}" Command="{Binding ToggleAccountRevealCommand}"
+                                     IsVisible="{Binding IsLoggedIn}" WidthRequest="22" HeightRequest="22"
+                                     Padding="0" BackgroundColor="Transparent" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
 
                     <!-- Logged out: offer login -->
                     <Button Text="{loc:Tr Status_LogIn}"

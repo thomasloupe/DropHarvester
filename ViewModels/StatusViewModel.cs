@@ -101,6 +101,34 @@ public partial class StatusViewModel : ObservableViewModel
 
     [ObservableProperty] private bool _isLoggedIn;
     [ObservableProperty] private string _accountLine = "Not logged in";
+
+    /// <summary>The sensitive account detail ("username (id 123)") when revealed, or a dot mask when hidden.
+    /// Shown after "Logged in" and toggled by the eyeball button; only visible while logged in.</summary>
+    [ObservableProperty] private string _accountDetail = "";
+
+    /// <summary>Whether the username + id are revealed. Defaults to HIDDEN every launch and is NOT persisted -
+    /// there's deliberately no setting to change that default.</summary>
+    [ObservableProperty] private bool _accountRevealed;
+
+    // the revealed "username (id 123)" text, cached so the eye toggle flips mask<->detail without re-reading auth
+    string _accountDetailRevealed = "";
+    const string AccountMask = "••••••••"; // eight bullets
+
+    /// <summary>The eye button icon: a plain eye while hidden (click to show), an eye with a bar while
+    /// revealed (click to hide) - the icon shows the action the button performs.</summary>
+    public string EyeIcon => AccountRevealed ? "eyeoff.png" : "eye.png";
+
+    /// <summary>Swap between the dot mask and the real detail, and flip the eye icon, when reveal toggles.</summary>
+    /// <param name="value">True once the username/id are revealed.</param>
+    partial void OnAccountRevealedChanged(bool value)
+    {
+        AccountDetail = value ? _accountDetailRevealed : AccountMask;
+        OnPropertyChanged(nameof(EyeIcon));
+    }
+
+    /// <summary>Toggle the username/id between hidden and shown (the eyeball button).</summary>
+    [RelayCommand]
+    void ToggleAccountReveal() => AccountRevealed = !AccountRevealed;
     [ObservableProperty] private bool _loginInProgress;
     [ObservableProperty] private bool _showDeviceCode;
     [ObservableProperty] private string _deviceCode = "";
@@ -620,6 +648,8 @@ public partial class StatusViewModel : ObservableViewModel
     {
         IsLoggedIn = _auth.IsLoggedIn;
         var who = string.IsNullOrEmpty(_auth.State.DisplayName) ? _auth.State.Username : _auth.State.DisplayName;
-        AccountLine = _auth.IsLoggedIn ? Loc.T("Status_LoggedInAs", who, _auth.State.UserId) : Loc.T("Status_NotLoggedIn");
+        AccountLine = _auth.IsLoggedIn ? Loc.T("Status_LoggedIn") : Loc.T("Status_NotLoggedIn");
+        _accountDetailRevealed = _auth.IsLoggedIn ? Loc.T("Status_AccountDetail", who, _auth.State.UserId) : "";
+        AccountDetail = AccountRevealed ? _accountDetailRevealed : AccountMask;
     }
 }

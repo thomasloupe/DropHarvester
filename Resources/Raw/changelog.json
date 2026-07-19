@@ -1,5 +1,9 @@
 [
   {
+    "version": "1.23.0",
+    "notes": "NEW: Your Twitch username and id on the Status page are now hidden by default behind an eyeball button. Click the eye to show them and click it again to hide."
+  },
+  {
     "version": "1.22.1",
     "notes": "CHANGE: Removed the version/View Changes line from the bottom of the Status page. View Changes stays on the Settings page."
   },

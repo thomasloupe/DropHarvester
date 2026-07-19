@@ -208,6 +208,8 @@ public static partial class LocStrings
         ["Status_Idle"] = "대기 중",
         ["Status_NotLoggedIn"] = "로그인 안 됨",
         ["Status_LoggedInAs"] = "{0}(으)로 로그인됨 (id {1})",
+        ["Status_LoggedIn"] = "로그인됨",
+        ["Status_AccountDetail"] = "{0} (id {1})",
         ["Status_ConnectionIssue"] = "Twitch Drops에 문제가 있거나 연결이 끊겼습니다. 연결이 다시 설정되면 자동으로 수확을 재개합니다.",
         ["Status_DropsOutage"] = "현재 Twitch가 시청은 받아들이지만 드롭 진행도를 적립하지 않고 있습니다(트위치 측 장애). 수확은 계속 실행되며 복구되면 자동으로 재개됩니다.",
         ["Login_Requesting"] = "Twitch에서 로그인 코드를 요청하는 중...",

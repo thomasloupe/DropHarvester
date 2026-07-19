@@ -208,6 +208,8 @@ public static partial class LocStrings
         ["Status_Idle"] = "Inactief",
         ["Status_NotLoggedIn"] = "Niet ingelogd",
         ["Status_LoggedInAs"] = "Ingelogd als {0} (id {1})",
+        ["Status_LoggedIn"] = "Ingelogd",
+        ["Status_AccountDetail"] = "{0} (id {1})",
         ["Status_ConnectionIssue"] = "Twitch Drops ondervinden problemen of je hebt de verbinding verloren. We hervatten het oogsten automatisch zodra de verbinding is hersteld.",
         ["Status_DropsOutage"] = "Twitch accepteert het kijken wel, maar schrijft momenteel geen drop-voortgang bij (een storing aan Twitch-zijde). Het oogsten blijft doorlopen en wordt automatisch hervat zodra het is opgelost.",
         ["Login_Requesting"] = "Een logincode aanvragen bij Twitch...",

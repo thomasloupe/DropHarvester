@@ -208,6 +208,8 @@ public static partial class LocStrings
         ["Status_Idle"] = "Простой",
         ["Status_NotLoggedIn"] = "Вход не выполнен",
         ["Status_LoggedInAs"] = "Выполнен вход как {0} (id {1})",
+        ["Status_LoggedIn"] = "Вход выполнен",
+        ["Status_AccountDetail"] = "{0} (id {1})",
         ["Status_ConnectionIssue"] = "Twitch Drops испытывают проблемы или вы потеряли соединение. Мы автоматически возобновим сбор, как только соединение будет восстановлено.",
         ["Status_DropsOutage"] = "Twitch принимает просмотры, но сейчас не засчитывает прогресс дропов (сбой на стороне Twitch). Сбор продолжается и автоматически возобновится, как только всё восстановят.",
         ["Login_Requesting"] = "Запрос кода входа у Twitch...",

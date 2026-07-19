@@ -208,6 +208,8 @@ public static partial class LocStrings
         ["Status_Idle"] = "Inactivo",
         ["Status_NotLoggedIn"] = "Sesión no iniciada",
         ["Status_LoggedInAs"] = "Sesión iniciada como {0} (id {1})",
+        ["Status_LoggedIn"] = "Sesión iniciada",
+        ["Status_AccountDetail"] = "{0} (id {1})",
         ["Status_ConnectionIssue"] = "Twitch Drops tiene problemas o has perdido la conexión. Reanudaremos la cosecha automáticamente cuando se restablezca la conexión.",
         ["Status_DropsOutage"] = "Twitch acepta las visualizaciones, pero ahora mismo no acredita el progreso de los drops (una interrupción del lado de Twitch). La cosecha sigue en marcha y se reanudará automáticamente cuando se solucione.",
         ["Login_Requesting"] = "Solicitando un código de inicio de sesión a Twitch...",

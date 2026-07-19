@@ -208,6 +208,8 @@ public static partial class LocStrings
         ["Status_Idle"] = "Inactif",
         ["Status_NotLoggedIn"] = "Non connecté",
         ["Status_LoggedInAs"] = "Connecté en tant que {0} (id {1})",
+        ["Status_LoggedIn"] = "Connecté",
+        ["Status_AccountDetail"] = "{0} (id {1})",
         ["Status_ConnectionIssue"] = "Les Twitch Drops rencontrent des problèmes ou vous avez perdu la connexion. Nous reprendrons automatiquement la récolte dès que la connexion aura été rétablie.",
         ["Status_DropsOutage"] = "Twitch accepte les visionnages mais ne crédite pas la progression des drops pour le moment (une panne côté Twitch). La récolte continue et reprendra automatiquement une fois le problème résolu.",
         ["Login_Requesting"] = "Demande d'un code de connexion à Twitch...",
