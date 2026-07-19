@@ -59,13 +59,16 @@ public sealed class ChangelogService : IChangelogService
         var byVersion = new Dictionary<string, ReleaseNote>(StringComparer.OrdinalIgnoreCase);
 
         // 1. bundled notes shipped with this build (everything up to the running version) - no network
-        foreach (var e in await LoadBundledAsync().ConfigureAwait(false))
+        var bundled = await LoadBundledAsync().ConfigureAwait(false);
+        foreach (var e in bundled)
             if (!string.IsNullOrWhiteSpace(e.Version))
                 byVersion[Norm(e.Version)] = new ReleaseNote { Version = Norm(e.Version), Notes = e.Notes?.Trim() ?? "" };
 
-        // 2. only the releases NEWER than what we shipped with, from GitHub (one page, newest first). This is
-        //    the whole point of bundling: we never re-fetch the history the app already carries, just the gap
-        //    between the running build and the latest release. Best-effort: offline just shows the bundled set.
+        // 2. releases from GitHub (one page, newest first). Normally we only take those NEWER than what we
+        //    shipped with - the whole point of bundling is to never re-fetch the history the app already
+        //    carries, just the gap to the latest release. But if the bundled asset failed to load, fall back
+        //    to taking ALL fetched releases so the popup is never empty. Best-effort: offline shows bundled.
+        var haveBundled = byVersion.Count > 0;
         try
         {
             var gh = new GitHubClient(new ProductHeaderValue("DropHarvester", current));
@@ -75,7 +78,7 @@ public sealed class ChangelogService : IChangelogService
             {
                 if (r.Draft || r.Prerelease || string.IsNullOrWhiteSpace(r.TagName))
                     continue;
-                if (!IsNewer(r.TagName, current))
+                if (haveBundled && !IsNewer(r.TagName, current))
                     continue; // bundled already covers everything at/below the running version
                 byVersion[Norm(r.TagName)] = new ReleaseNote { Version = Norm(r.TagName), Notes = (r.Body ?? "").Trim() };
             }
