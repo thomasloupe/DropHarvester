@@ -43,6 +43,11 @@ public static partial class LocStrings
         ["Status_Queue"] = "QUEUE",
         ["Status_RemoveOverride"] = "Remove override",
         ["Status_Overriding"] = "Overriding...",
+        ["Changelog_ViewChanges"] = "View Changes",
+        ["Changelog_Title"] = "What's changed",
+        ["Changelog_YouAreHere"] = "YOU ARE HERE",
+        ["Changelog_Latest"] = "LATEST",
+        ["Changelog_Unavailable"] = "Changelog unavailable.",
         ["Status_AllowNewHigherPriority"] = "Allow new higher priority campaigns to end this override",
 
         // ----- Settings: language -----

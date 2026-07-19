@@ -23,6 +23,7 @@ public partial class SettingsViewModel : ObservableViewModel
     readonly ISoundService _sound;
     readonly IDebugServer _debug;
     readonly IUpdateService _update;
+    readonly IChangelogPresenter _changelog;
     readonly AppSettings _s;
     bool _loading;
     List<AudioDevice> _audioDevices = new();
@@ -97,7 +98,7 @@ public partial class SettingsViewModel : ObservableViewModel
     public SettingsViewModel(
         ISettingsStore store, IHarvesterOrchestrator harvester, IWebhookNotifier webhook,
         IAutostartService autostart, IGameSearchService search, ISoundService sound, IDebugServer debug,
-        IUpdateService update)
+        IUpdateService update, IChangelogPresenter changelog)
     {
         _store = store;
         _harvester = harvester;
@@ -107,6 +108,7 @@ public partial class SettingsViewModel : ObservableViewModel
         _sound = sound;
         _debug = debug;
         _update = update;
+        _changelog = changelog;
         _s = store.Settings;
 
         _loading = true;
@@ -199,6 +201,10 @@ public partial class SettingsViewModel : ObservableViewModel
     /// <summary>Saves when the selected audio output device changes.</summary>
     /// <param name="value">the new device index.</param>
     partial void OnAudioDeviceIndexChanged(int value) => Save();
+
+    /// <summary>Opens the "What's changed" popup listing each version's release notes.</summary>
+    [RelayCommand]
+    Task ViewChanges() => _changelog.ShowAsync();
 
     /// <summary>Prompts for an audio file and stores it as the drop-claimed sound.</summary>
     [RelayCommand]

@@ -42,6 +42,11 @@ public static partial class LocStrings
         ["Status_Queue"] = "WACHTRIJ",
         ["Status_RemoveOverride"] = "Overschrijving verwijderen",
         ["Status_Overriding"] = "Overschrijven...",
+        ["Changelog_ViewChanges"] = "Wijzigingen bekijken",
+        ["Changelog_Title"] = "Wat is nieuw",
+        ["Changelog_YouAreHere"] = "JE BENT HIER",
+        ["Changelog_Latest"] = "NIEUWSTE",
+        ["Changelog_Unavailable"] = "Wijzigingslogboek niet beschikbaar.",
         ["Status_AllowNewHigherPriority"] = "Nieuwe campagnes met hogere prioriteit deze overschrijving laten beëindigen",
 
         // ----- Settings: language -----

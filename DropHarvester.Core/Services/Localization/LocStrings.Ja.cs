@@ -42,6 +42,11 @@ public static partial class LocStrings
         ["Status_Queue"] = "キュー",
         ["Status_RemoveOverride"] = "上書きを解除",
         ["Status_Overriding"] = "上書き中...",
+        ["Changelog_ViewChanges"] = "変更を表示",
+        ["Changelog_Title"] = "変更点",
+        ["Changelog_YouAreHere"] = "使用中",
+        ["Changelog_Latest"] = "最新",
+        ["Changelog_Unavailable"] = "変更履歴を利用できません。",
         ["Status_AllowNewHigherPriority"] = "より優先度の高い新しいキャンペーンでこの上書きを終了できるようにする",
 
         // ----- Settings: language -----

@@ -42,6 +42,11 @@ public static partial class LocStrings
         ["Status_Queue"] = "FILE D'ATTENTE",
         ["Status_RemoveOverride"] = "Supprimer le forçage",
         ["Status_Overriding"] = "Forçage...",
+        ["Changelog_ViewChanges"] = "Voir les changements",
+        ["Changelog_Title"] = "Nouveautés",
+        ["Changelog_YouAreHere"] = "VOUS ÊTES ICI",
+        ["Changelog_Latest"] = "DERNIÈRE",
+        ["Changelog_Unavailable"] = "Journal des modifications indisponible.",
         ["Status_AllowNewHigherPriority"] = "Autoriser les nouvelles campagnes plus prioritaires à mettre fin à ce forçage",
 
         // ----- Settings: language -----

@@ -40,6 +40,11 @@ public static class MauiProgram
         builder.Services.AddDropHarvesterCore();
 
         builder.Services.AddSingleton<IUpdateService, UpdateService>();
+        // "What's changed" popup: bundled changelog + newer-from-GitHub, shown modally from Status/Settings.
+        builder.Services.AddSingleton<IChangelogService, ChangelogService>();
+        builder.Services.AddSingleton<IChangelogPresenter, ChangelogPresenter>();
+        builder.Services.AddTransient<ChangelogViewModel>();  // fresh load each time the popup opens
+        builder.Services.AddTransient<ChangelogPage>();
         // The coordinator (instantiated at startup) subscribes to the bus and drives tray status,
         // native notifications and the claim sound.
         builder.Services.AddSingleton<AlertsCoordinator>();

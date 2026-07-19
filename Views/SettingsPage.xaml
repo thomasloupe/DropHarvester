@@ -59,9 +59,13 @@
                            Style="{StaticResource Muted}" FontSize="12" />
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                         <Label Text="{Binding CurrentVersionText}" Style="{StaticResource Muted}" FontSize="12" VerticalOptions="Center" />
-                        <Button Grid.Column="1" Text="{loc:Tr Settings_CheckNow}" Style="{StaticResource GhostButton}" MinimumWidthRequest="120"
-                                IsEnabled="{Binding CheckingForUpdates, Converter={StaticResource InvertBool}}"
-                                Command="{Binding CheckForUpdatesCommand}" />
+                        <HorizontalStackLayout Grid.Column="1" Spacing="8">
+                            <Button Text="{loc:Tr Changelog_ViewChanges}" Style="{StaticResource GhostButton}" MinimumWidthRequest="120"
+                                    Command="{Binding ViewChangesCommand}" />
+                            <Button Text="{loc:Tr Settings_CheckNow}" Style="{StaticResource GhostButton}" MinimumWidthRequest="120"
+                                    IsEnabled="{Binding CheckingForUpdates, Converter={StaticResource InvertBool}}"
+                                    Command="{Binding CheckForUpdatesCommand}" />
+                        </HorizontalStackLayout>
                     </Grid>
                     <Label Text="{Binding UpdateCheckStatus}" Style="{StaticResource Muted}" FontSize="12"
                            IsVisible="{Binding UpdateCheckStatus, Converter={StaticResource StringNotEmpty}}" />

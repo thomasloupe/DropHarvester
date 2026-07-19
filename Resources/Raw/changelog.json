@@ -1,0 +1,58 @@
+[
+  {
+    "version": "1.21.0",
+    "notes": "NEW: A View Changes button on the Status and Settings pages opens a scrollable popup listing every version's changes, with a yellow YOU ARE HERE badge on your version and a purple LATEST badge on the newest."
+  },
+  {
+    "version": "1.20.0",
+    "notes": "FIX: A linked campaign whose official channel is live now gets watched even when Twitch reports no available drops on it (co-stream and esports channels), so the harvester no longer sits idle on a channel that is actually crediting.\nFIX: Finished drops are claimed within seconds instead of waiting up to a minute.\nFIX: After a campaign finishes, the harvester moves on to the next one right away.\nNEW: A Refresh button on the Channels tab to re-gather the channel list on demand.\nNEW: The queue Harvest button shows \"Overriding...\" while the switch is coming up."
+  },
+  {
+    "version": "1.19.0",
+    "notes": "FIX: Badges and emotes that you already earned are no longer harvested over and over. Watching one to its required time now counts as earned and it is confirmed done permanently.\nNEW: Each drop shows a type tag (EMOTE, BADGE, or DROP) on the Inventory and Status pages, with a legend, alongside the existing SUB tag.\nNEW: The queue shows the total watch time remaining, and each campaign's time to finish in its own column."
+  },
+  {
+    "version": "1.18.9",
+    "notes": "CHANGE: A campaign that gives up is now benched for 30 minutes with a clearer \"Ignoring campaign\" message.\nCHANGE: Skip messages now name the specific campaign and its game, so a game with several campaigns (like Special Events) is never ambiguous about which one was passed over.\nFIX: Stopped logging the harmless reorder drag error that happens when running as administrator.\nFIX: Removed a leftover startup diagnostic that was cluttering the crash log."
+  },
+  {
+    "version": "1.18.8",
+    "notes": "NEW: Before watching an allow-listed channel, DropHarvester now confirms Twitch has the campaign's drop actually active on it, skipping channels that aren't really airing it.\nCHANGE: A campaign that isn't crediting is benched as a whole (all tiers) after a channel or two and the harvester moves on, instead of grinding each tier. Campaigns are never removed from the pool and retry later."
+  },
+  {
+    "version": "1.18.7",
+    "notes": "FIX: No more false 'Twitch is down' banner while harvesting an unlinked (opt-in) campaign that can't credit. Verified it stays clear across a sustained watch; a real outage on your linked campaigns still shows."
+  },
+  {
+    "version": "1.18.6",
+    "notes": "FIX: The Twitch-outage banner is now based on whether Twitch is actually crediting drops, not on link status, so being parked on an event campaign whose tier doesn't credit here no longer shows a false outage while a real outage still does."
+  },
+  {
+    "version": "1.18.5",
+    "notes": "FIX: No longer shows a false Twitch-outage banner while harvesting an unlinked (opt-in) campaign that can't credit; outage detection now only applies to linked campaigns that should be crediting."
+  },
+  {
+    "version": "1.18.4",
+    "notes": "FIX: Drop tiers that share a reward with an already-claimed tier (e.g. Marbles coin tiers) are no longer wrongly marked claimed and stranded; a still-in-progress tier now resumes and finishes."
+  },
+  {
+    "version": "1.18.3",
+    "notes": "FIX: Priority, excluded, and Harvest-unlinked list changes now take effect immediately instead of waiting out an idle cycle."
+  },
+  {
+    "version": "1.18.2",
+    "notes": "FIX: Campaigns whose only remaining drops need no watch time (buy-drop tiers and instant/participation drops) are no longer wrongly treated as finished, so their other earnable drops keep harvesting."
+  },
+  {
+    "version": "1.18.1",
+    "notes": "FIX: macOS menu-bar item now shows the app icon."
+  },
+  {
+    "version": "1.18.0",
+    "notes": "NEW: macOS menu-bar item with a status line, Open, and Quit, so harvesting keeps running while the window is closed."
+  },
+  {
+    "version": "1.17.0",
+    "notes": "NEW: Automatic watch method failover. If drop progress stalls while watches are still accepted, DropHarvester tries backup methods (beacon, spade, trowel, then GraphQL) one at a time and stays on whichever credits, or settles back and flags the outage if none do.\nNEW: Active watch method is shown in the debug server, and the watch probe now tests every method."
+  }
+]

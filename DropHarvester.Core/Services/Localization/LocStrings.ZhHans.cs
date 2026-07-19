@@ -42,6 +42,11 @@ public static partial class LocStrings
         ["Status_Queue"] = "队列",
         ["Status_RemoveOverride"] = "移除覆盖",
         ["Status_Overriding"] = "覆盖中...",
+        ["Changelog_ViewChanges"] = "查看更改",
+        ["Changelog_Title"] = "更新内容",
+        ["Changelog_YouAreHere"] = "你在这里",
+        ["Changelog_Latest"] = "最新",
+        ["Changelog_Unavailable"] = "变更日志不可用。",
         ["Status_AllowNewHigherPriority"] = "允许新的更高优先级活动结束此覆盖",
 
         // ----- Settings: language -----

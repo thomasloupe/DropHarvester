@@ -42,6 +42,11 @@ public static partial class LocStrings
         ["Status_Queue"] = "대기열",
         ["Status_RemoveOverride"] = "재정의 제거",
         ["Status_Overriding"] = "재정의 중...",
+        ["Changelog_ViewChanges"] = "변경 사항 보기",
+        ["Changelog_Title"] = "변경 내용",
+        ["Changelog_YouAreHere"] = "현재 버전",
+        ["Changelog_Latest"] = "최신",
+        ["Changelog_Unavailable"] = "변경 로그를 사용할 수 없습니다.",
         ["Status_AllowNewHigherPriority"] = "우선순위가 더 높은 새 캠페인이 이 재정의를 종료하도록 허용",
 
         // ----- Settings: language -----

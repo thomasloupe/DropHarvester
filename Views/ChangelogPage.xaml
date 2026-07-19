@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:DropHarvester.ViewModels"
+             xmlns:svc="clr-namespace:DropHarvester.Services"
+             xmlns:loc="clr-namespace:DropHarvester.Localization"
+             x:Class="DropHarvester.Views.ChangelogPage"
+             x:DataType="vm:ChangelogViewModel"
+             BackgroundColor="#CC000000">
+
+    <!-- Dimmed backdrop: tapping it (outside the card) closes the popup -->
+    <Grid Padding="20">
+        <Grid.GestureRecognizers>
+            <TapGestureRecognizer Tapped="OnBackdropTapped" />
+        </Grid.GestureRecognizers>
+
+        <!-- The popup card -->
+        <Border BackgroundColor="{StaticResource DhSurface}" Stroke="{StaticResource DhBorder}" StrokeThickness="1"
+                StrokeShape="RoundRectangle 14" Padding="0"
+                HorizontalOptions="Center" VerticalOptions="Center"
+                WidthRequest="580" MaximumHeightRequest="660">
+            <!-- absorb taps so interacting with the card doesn't close it -->
+            <Border.GestureRecognizers>
+                <TapGestureRecognizer />
+            </Border.GestureRecognizers>
+
+            <Grid RowDefinitions="Auto,*" Padding="18" RowSpacing="12">
+
+                <!-- Header -->
+                <Grid ColumnDefinitions="*,Auto">
+                    <Label Text="{loc:Tr Changelog_Title}" Style="{StaticResource H1}" FontSize="18" VerticalOptions="Center" />
+                    <Button Grid.Column="1" Text="&#x2715;" Clicked="OnCloseClicked"
+                            BackgroundColor="{StaticResource DhSurface2}" TextColor="{StaticResource DhText}"
+                            BorderColor="{StaticResource DhBorder}" BorderWidth="1"
+                            WidthRequest="36" HeightRequest="36" CornerRadius="10" Padding="0" FontSize="14" />
+                </Grid>
+
+                <!-- Loading / empty / list -->
+                <ActivityIndicator Grid.Row="1" IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}"
+                                   Color="{StaticResource DhAccent}" VerticalOptions="Start" HorizontalOptions="Center" />
+                <Label Grid.Row="1" Text="{loc:Tr Changelog_Unavailable}" Style="{StaticResource Muted}"
+                       IsVisible="{Binding IsEmpty}" VerticalOptions="Start" />
+
+                <CollectionView Grid.Row="1" ItemsSource="{Binding Releases}" IsVisible="{Binding IsLoading, Converter={StaticResource InvertBool}}">
+                    <CollectionView.ItemsLayout>
+                        <LinearItemsLayout Orientation="Vertical" ItemSpacing="14" />
+                    </CollectionView.ItemsLayout>
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="svc:ReleaseNote">
+                            <VerticalStackLayout Spacing="6">
+                                <!-- version + badges -->
+                                <HorizontalStackLayout Spacing="8" VerticalOptions="Center">
+                                    <Label Text="{Binding DisplayVersion}" Style="{StaticResource Body}"
+                                           FontAttributes="Bold" FontSize="15" VerticalOptions="Center" />
+                                    <Border BackgroundColor="{StaticResource DhGold}" StrokeThickness="0" StrokeShape="RoundRectangle 4"
+                                            Padding="6,1" VerticalOptions="Center" IsVisible="{Binding IsCurrent}">
+                                        <Label Text="{loc:Tr Changelog_YouAreHere}" TextColor="#1A1204" FontSize="10" FontAttributes="Bold" />
+                                    </Border>
+                                    <Border BackgroundColor="{StaticResource DhAccent}" StrokeThickness="0" StrokeShape="RoundRectangle 4"
+                                            Padding="6,1" VerticalOptions="Center" IsVisible="{Binding IsLatest}">
+                                        <Label Text="{loc:Tr Changelog_Latest}" TextColor="White" FontSize="10" FontAttributes="Bold" />
+                                    </Border>
+                                </HorizontalStackLayout>
+                                <!-- notes -->
+                                <Label Text="{Binding Notes}" Style="{StaticResource Muted}" FontSize="13" LineBreakMode="WordWrap" />
+                            </VerticalStackLayout>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+
+            </Grid>
+        </Border>
+    </Grid>
+</ContentPage>

@@ -42,6 +42,11 @@ public static partial class LocStrings
         ["Status_Queue"] = "ОЧЕРЕДЬ",
         ["Status_RemoveOverride"] = "Убрать переопределение",
         ["Status_Overriding"] = "Переопределение...",
+        ["Changelog_ViewChanges"] = "Показать изменения",
+        ["Changelog_Title"] = "Что нового",
+        ["Changelog_YouAreHere"] = "ВЫ ЗДЕСЬ",
+        ["Changelog_Latest"] = "ПОСЛЕДНЯЯ",
+        ["Changelog_Unavailable"] = "Журнал изменений недоступен.",
         ["Status_AllowNewHigherPriority"] = "Разрешить новым кампаниям с более высоким приоритетом завершить это переопределение",
 
         // ----- Settings: language -----

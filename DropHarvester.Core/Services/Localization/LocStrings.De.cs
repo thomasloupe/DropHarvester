@@ -42,6 +42,11 @@ public static partial class LocStrings
         ["Status_Queue"] = "WARTESCHLANGE",
         ["Status_RemoveOverride"] = "Manuelle Auswahl entfernen",
         ["Status_Overriding"] = "Wird überschrieben...",
+        ["Changelog_ViewChanges"] = "Änderungen anzeigen",
+        ["Changelog_Title"] = "Was ist neu",
+        ["Changelog_YouAreHere"] = "DU BIST HIER",
+        ["Changelog_Latest"] = "NEUESTE",
+        ["Changelog_Unavailable"] = "Änderungsprotokoll nicht verfügbar.",
         ["Status_AllowNewHigherPriority"] = "Neuen Kampagnen mit höherer Priorität erlauben, diese manuelle Auswahl zu beenden",
 
         // ----- Settings: language -----

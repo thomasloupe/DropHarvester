@@ -21,6 +21,7 @@ public partial class StatusViewModel : ObservableViewModel
     readonly IHarvesterEventBus _bus;
     readonly IUpdateService _update;
     readonly ISettingsStore _settings;
+    readonly IChangelogPresenter _changelog;
     CancellationTokenSource? _loginCts;
 
     /// <summary>Subscribes to auth and harvester-event notifications, syncs login state, starts the per-second
@@ -31,13 +32,14 @@ public partial class StatusViewModel : ObservableViewModel
     /// <param name="update">Update service for checking and downloading new versions.</param>
     /// <param name="settings">Persisted settings store.</param>
     public StatusViewModel(ITwitchAuth auth, IHarvesterOrchestrator harvester, IHarvesterEventBus bus,
-        IUpdateService update, ISettingsStore settings)
+        IUpdateService update, ISettingsStore settings, IChangelogPresenter changelog)
     {
         _auth = auth;
         _harvester = harvester;
         _bus = bus;
         _update = update;
         _settings = settings;
+        _changelog = changelog;
 
         _auth.AuthChanged += OnAuthChanged;
         _bus.Event += OnHarvesterEvent;
@@ -192,6 +194,10 @@ public partial class StatusViewModel : ObservableViewModel
     /// <summary>Clears any active manual campaign override.</summary>
     [RelayCommand]
     void RemoveOverride() => _harvester.ClearCampaignOverride();
+
+    /// <summary>Opens the "What's changed" popup listing each version's release notes.</summary>
+    [RelayCommand]
+    Task ViewChanges() => _changelog.ShowAsync();
 
     // Active drop/campaign models, re-read each second so their countdowns tick down to the second.
     TimedDrop? _activeDrop;

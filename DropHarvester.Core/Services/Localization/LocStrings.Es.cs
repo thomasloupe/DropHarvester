@@ -42,6 +42,11 @@ public static partial class LocStrings
         ["Status_Queue"] = "COLA",
         ["Status_RemoveOverride"] = "Quitar anulación",
         ["Status_Overriding"] = "Anulando...",
+        ["Changelog_ViewChanges"] = "Ver cambios",
+        ["Changelog_Title"] = "Novedades",
+        ["Changelog_YouAreHere"] = "ESTÁS AQUÍ",
+        ["Changelog_Latest"] = "ÚLTIMA",
+        ["Changelog_Unavailable"] = "Registro de cambios no disponible.",
         ["Status_AllowNewHigherPriority"] = "Permitir que nuevas campañas de mayor prioridad terminen esta anulación",
 
         // ----- Settings: language -----
