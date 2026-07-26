@@ -1,5 +1,9 @@
 [
   {
+    "version": "1.23.2",
+    "notes": "FIX: Settings, stats, and history are now written atomically with an automatic backup and recovered from it if a file is ever unreadable, so an interrupted update or a corrupt file can no longer reset your settings."
+  },
+  {
     "version": "1.23.1",
     "notes": "FIX: Some event drops that Twitch keeps re-offering (like Warframe Prime Time) no longer pile up over and over in recent history or get counted repeatedly in your stats. Each earned drop and finished campaign is logged once."
   },
