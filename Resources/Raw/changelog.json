@@ -1,5 +1,9 @@
 [
   {
+    "version": "1.23.1",
+    "notes": "FIX: Some event drops that Twitch keeps re-offering (like Warframe Prime Time) no longer pile up over and over in recent history or get counted repeatedly in your stats. Each earned drop and finished campaign is logged once."
+  },
+  {
     "version": "1.23.0",
     "notes": "NEW: Your Twitch username and id on the Status page are now hidden by default behind an eyeball button. Click the eye to show them and click it again to hide."
   },

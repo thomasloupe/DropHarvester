@@ -179,6 +179,10 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
     // per-TIER claim set (drop-definition ids), so a campaign whose tiers share one reward id (Marbles'
     // 15-coin drops) finishes tier-by-tier; survives Twitch's per-drop self lagging back to 0
     readonly HashSet<string> _claimedDropIds = new(StringComparer.OrdinalIgnoreCase);
+    // campaign ids we've already published a "complete" event for, so a finished campaign that keeps
+    // passing through the claim sweep (Twitch re-serving an already-claimed event drop like Warframe's
+    // Prime Time as claimable) announces once instead of flooding history/stats every sweep
+    readonly HashSet<string> _completedAnnounced = new(StringComparer.OrdinalIgnoreCase);
     // reward id -> windows of all campaigns granting it, to attribute a claim to the right campaign
     Dictionary<string, List<(DateTimeOffset start, DateTimeOffset end)>> _benefitWindows = new(StringComparer.OrdinalIgnoreCase);
     bool _claimHistoryLogged; // logged once to confirm award dates are present
@@ -762,7 +766,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
                 // here - moving on collects the other channels' drops sooner (generics already accrued)
                 if (campaign.AllowedChannels.Count > 0)
                     Log($"Done with {channel.DisplayName}'s channel-specific drop - moving to the next official channel to save time (staying here would just repeat those hours later).");
-                _bus.Publish(new CampaignCompletedEvent(campaign));
+                AnnounceCampaignComplete(campaign);
                 return;
             }
             if (!ReferenceEquals(drop, ActiveDrop))
@@ -1265,7 +1269,11 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
         var claimedAny = false;
         foreach (var drop in campaign.Drops)
         {
-            if (!drop.CanClaim)
+            // Skip anything already in our permanent ledger: Twitch re-serves some event drops (Warframe's
+            // Prime Time "Vitus Essence") as claimable again on every inventory sync even after we've claimed
+            // them, and re-claiming returns DROP_INSTANCE_ALREADY_CLAIMED - so without this we'd re-publish
+            // "claimed" and re-count it every sweep. The 6s claim retry already skips ledgered drops the same way.
+            if (!drop.CanClaim || WeClaimedDrop(drop))
                 continue;
             try
             {
@@ -1293,7 +1301,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             }
         }
         if (campaign.IsFinished)
-            _bus.Publish(new CampaignCompletedEvent(campaign));
+            AnnounceCampaignComplete(campaign);
         if (claimedAny && !campaign.IsFinished)
             // a MID-campaign claim can unlock the next tier / precondition drop, so force a fresh discovery
             // on the next pick to surface it. A FULLY-finished campaign has nothing left to unlock here, so we
@@ -1636,6 +1644,18 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
         if (string.IsNullOrEmpty(drop.Id) || !_claimedDropIds.Add(drop.Id))
             return;
         _ledger.RecordDrop(drop.Id, at);
+    }
+
+    /// <summary>Publish a campaign-complete event at most once per campaign id. A finished campaign is
+    /// revisited on every claim sweep and re-pick, so without this guard an event drop that Twitch keeps
+    /// re-serving as claimable would re-announce "complete" (and re-count it in the lifetime stats) on
+    /// every pass.</summary>
+    /// <param name="campaign">The campaign that finished.</param>
+    void AnnounceCampaignComplete(DropsCampaign campaign)
+    {
+        if (string.IsNullOrEmpty(campaign.Id) || !_completedAnnounced.Add(campaign.Id))
+            return;
+        _bus.Publish(new CampaignCompletedEvent(campaign));
     }
 
     /// <summary>True when the claim of reward <paramref name="benefitId"/> can be attributed to campaign
