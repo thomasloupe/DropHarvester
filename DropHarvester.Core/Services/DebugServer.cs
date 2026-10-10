@@ -275,7 +275,7 @@ public sealed class DebugServer : IDebugServer
         + "<a href=\"/snapshot\">/snapshot</a> - live harvester state + per-campaign/drop decisions (JSON)"
         + "<a href=\"/campaigns-all\">/campaigns-all</a> - EVERY discovered campaign (incl. finished/inactive) + why it's skipped (JSON)"
         + "<a href=\"/claims-raw\">/claims-raw</a> - raw claim history from Twitch (gameEventDrops, JSON)"
-        + "<a href=\"/watch-probe\">/watch-probe</a> - send one minute-watched heartbeat now, dump the full request/response (JSON)"
+        + "<a href=\"/watch-probe\">/watch-probe</a> - run one watch on every watch method now (HLS stream + heartbeats), dump each round-trip (JSON)"
         + "<a href=\"/authstate\">/authstate</a> - current auth/session context, secrets redacted (JSON)"
         + "<a href=\"/harvest\">/harvest</a> - list harvestable targets; ?id=&lt;id&gt; pins one, ?clear=1 releases (JSON)"
         + "<a href=\"/log\">/log</a> - rolling log (text)"

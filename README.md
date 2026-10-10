@@ -1,9 +1,9 @@
 # DropHarvester
 
 A native **.NET 10 MAUI** desktop app for **Windows and macOS** that harvests Twitch
-drops **without downloading the stream** - it emulates "watching" by sending a
-minute-watched heartbeat, so it earns drops on near-zero bandwidth. Modern UI with
-a number of extra features.
+drops **without downloading the stream** - it "watches" the way a player does, reading
+the stream's playlist and touching each new video segment with a headers-only request,
+so it earns drops on near-zero bandwidth. Modern UI with a number of extra features.
 
 ## Screenshots
 
@@ -15,7 +15,7 @@ a number of extra features.
 
 ### Core harvesting
 
-- **Stream-less drop harvesting** - no video download; a ~59s minute-watched heartbeat.
+- **Stream-less drop harvesting** - no video download: every ~10s it re-reads the stream's lowest-quality playlist and sends a headers-only (HEAD) request for each new segment, plus the minute-watched heartbeat.
 - **Automatic watch-method failover** - if Twitch stops crediting one watch method, it tries the backups and stays on whichever works, so a Twitch-side change costs minutes, not days.
 - **Automatic campaign discovery** from your linked accounts.
 - **Drops-enabled validation** - only harvests channels that can actually earn the drop.
@@ -80,7 +80,7 @@ Open **`http://localhost:5757/`** in a browser. Endpoints:
 - **`/`** - index with links to the endpoints below.
 - **`/snapshot`** - the main one: a JSON snapshot of live state and every decision.
 - **`/claims-raw`** - the raw claimed-drop history from Twitch (JSON).
-- **`/watch-probe`** - send a minute-watched heartbeat on every watch method now and dump each request/response, so you can see which methods Twitch is accepting.
+- **`/watch-probe`** - run one watch on every watch method now (a fresh HLS playback session, then each heartbeat) and dump each step, so you can see which methods Twitch is accepting.
 - **`/authstate`** - the current auth/session context, secrets redacted (JSON).
 - **`/harvest`** - list harvestable targets; `?id=<id>` pins one, `?clear=1` releases (JSON).
 - **`/log`** - the rolling log as plain text (up to 2000 recent lines).
@@ -96,6 +96,9 @@ Top level:
 - `Active` - the channel / game / campaign / drop being watched right now
 - `WatchTransport` / `WatchSelfHeal` - the watch method in use right now and the failover
   state (whether it's mid-rotation, exhausted, or an outage is flagged)
+- `WatchStream` - the HLS stream watch: channel, chosen quality (`Variant`), whether the
+  playback token is tied to your account (`TokenHasUser` - it must be, or nothing credits),
+  segments watched (and missed), the last good poll, and the last error
 - `Override` - the manual "Harvest" override state: whether one is `Active`, its
   `CampaignId` / `Campaign` name, and whether it's `DropOnly`
 - `LastClaimSweepUtc` - when the all-campaign claim safety-net last ran
@@ -260,10 +263,12 @@ The solution is three projects:
     mutation), with bounded retry/backoff on transient failures.
   - `InventoryService` - campaign/drop discovery, progress sync, claiming, and the
     claimed-reward history.
-  - `WatchService` - the minute-watched heartbeat, cascading across transports
-    (the `track` POST on beacon/spade/trowel hosts, then the `sendSpadeEvents`
-    GraphQL mutation) so the orchestrator can self-heal onto whichever Twitch is
-    crediting.
+  - `WatchService` - the watch, cascading across transports so the orchestrator can
+    self-heal onto whichever Twitch is crediting: the HLS stream watch first
+    (`HlsWatcher` - playback token, usher playlist, then a HEAD for each new segment
+    every ~10s, with the heartbeat alongside), then the minute-watched heartbeat alone
+    as fallbacks (the `track` POST on beacon/spade/trowel hosts, then the
+    `sendSpadeEvents` GraphQL mutation).
   - `WebsocketPool` - sharded PubSub (LISTEN/PING/reconnect).
   - `ChannelManager` - live drops-enabled channel discovery + stream state.
   - `HarvesterOrchestrator` - the run loop tying it together; emits `HarvesterEvent`s and

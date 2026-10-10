@@ -17,7 +17,7 @@ public sealed class GqlAuthException : Exception
 
 /// <summary>
 /// Thin client for Twitch's private GraphQL endpoint. Supports persisted-query operations (the
-/// normal case) and raw-query mutations (the stream-less watch). Uses the web client id + the
+/// normal case) and raw-query mutations (the heartbeat watch fallback). Uses the web client id + the
 /// logged-in user's OAuth token, mirroring a browser.
 /// </summary>
 public interface IGqlClient

@@ -1,5 +1,9 @@
 [
   {
+    "version": "1.24.0",
+    "notes": "FIX: Drops are progressing again. On Oct 8 Twitch stopped counting the minute-watched heartbeat that DropHarvester watched with, so progress froze on every drop and the app reported a Twitch drops outage. DropHarvester now watches the way a video player does: every 10 seconds it reads the stream's playlist and requests each new video segment's headers, so it still downloads no video.\nCHANGE: The old heartbeat methods are kept as automatic fallbacks in case Twitch switches back."
+  },
+  {
     "version": "1.23.2",
     "notes": "FIX: Settings, stats, and history are now written atomically with an automatic backup and recovered from it if a file is ever unreadable, so an interrupted update or a corrupt file can no longer reset your settings."
   },

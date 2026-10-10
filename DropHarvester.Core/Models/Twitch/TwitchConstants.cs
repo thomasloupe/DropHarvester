@@ -28,6 +28,9 @@ public static class TwitchConstants
 
     public const string GqlUrl = "https://gql.twitch.tv/gql";
     public const string PubSubUrl = "wss://pubsub-edge.twitch.tv/v1";
+    /// <summary>Usher's live HLS master playlist for a channel ({0} = login); takes the playback token's
+    /// <c>sig</c> and <c>token</c> as query parameters.</summary>
+    public const string UsherChannelHlsUrl = "https://usher.ttvnw.net/api/channel/hls/{0}.m3u8";
 
     /// <summary>Login-code activation needs no scopes (empty string).</summary>
     public const string OAuthScopes = "";
@@ -75,7 +78,10 @@ public static class TwitchConstants
         public static string ChannelStreamUpdate(string channelId) => $"broadcast-settings-update.{channelId}";
     }
 
-    // ----- Watch (minute-watched) transports -----
+    // ----- Watch transports -----
+    // Since Oct 2026 Twitch credits drops only to accounts that actually pull the stream, so the default
+    // transport reads the channel's HLS playlist and HEADs each new segment (see HlsWatcher). The
+    // minute-watched transports below are kept as fallbacks for when Twitch flips back.
     // The classic analytics "track" endpoint accepts the minute-watched POST on several interchangeable
     // hosts. Which one is reachable varies per user (some ad/tracker blockers and VPNs filter one host but
     // not another), so the watch cascades through them before falling back to the GraphQL mutation.
@@ -96,6 +102,9 @@ public static class TwitchConstants
 
     // ----- Intervals -----
     public static readonly TimeSpan WatchInterval = TimeSpan.FromSeconds(59);
+    // A live media playlist only holds ~30s of segments, so it has to be re-read well inside that window
+    // or part of every minute goes un-watched.
+    public static readonly TimeSpan HlsPollInterval = TimeSpan.FromSeconds(10);
     public static readonly TimeSpan PingInterval = TimeSpan.FromMinutes(3);
     public static readonly TimeSpan OnlineDelay = TimeSpan.FromSeconds(120);
 }

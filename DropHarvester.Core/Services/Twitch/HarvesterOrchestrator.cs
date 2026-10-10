@@ -10,7 +10,7 @@ namespace DropHarvester.Services.Twitch;
 /// <summary>
 /// The harvesting controller. Owns the async run loop: discover campaigns,
 /// pick the highest-priority campaign with unharvested drops, choose a live drops-enabled channel,
-/// send the stream-less watch heartbeat, sync/claim progress, and switch channels when the
+/// watch it without downloading video, sync/claim progress, and switch channels when the
 /// current one goes offline or a higher-priority game comes online. All notable events are
 /// published on the <see cref="IHarvesterEventBus"/>.
 /// </summary>
@@ -85,9 +85,9 @@ public interface IHarvesterOrchestrator
     /// unclaimed drop id, so a /harvest target can be picked without guessing ids.</summary>
     IReadOnlyList<object> DebugHarvestTargets();
 
-    /// <summary>Debug/testing: send one minute-watched heartbeat for the ACTIVE channel right now and return
-    /// the full round-trip (exact payload, HTTP status, raw response, sent headers) to diagnose a
-    /// 204-acked-but-not-credited watch.</summary>
+    /// <summary>Debug/testing: run one watch on every watch method for the ACTIVE channel right now and
+    /// return the full round-trip of each (HLS playback steps; heartbeat payload, HTTP status, raw response)
+    /// to diagnose an acked-but-not-credited watch.</summary>
     /// <param name="ct">Token to cancel the probe.</param>
     Task<object> DebugWatchProbeAsync(CancellationToken ct = default);
 
@@ -278,7 +278,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
     /// <param name="auth">Twitch auth / token state.</param>
     /// <param name="inventory">Campaign discovery, inventory sync, and drop claiming.</param>
     /// <param name="channels">Live-channel directory lookups and per-channel refresh.</param>
-    /// <param name="watch">Sends the minute-watched heartbeat that advances drops.</param>
+    /// <param name="watch">Watches the stream (or sends the heartbeat on a fallback) to advance drops.</param>
     /// <param name="ws">Websocket pool for PubSub topics.</param>
     /// <param name="bus">Event bus notable harvesting events are published on.</param>
     /// <param name="settings">Persisted app settings store.</param>
@@ -466,8 +466,8 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
         return list;
     }
 
-    /// <summary>Debug/testing: send one minute-watched heartbeat for the active channel and return the full
-    /// round-trip for inspection, or an explanation when there is no active channel to probe.</summary>
+    /// <summary>Debug/testing: run one watch on every watch method for the active channel and return the
+    /// full round-trip for inspection, or an explanation when there is no active channel to probe.</summary>
     /// <param name="ct">Token to cancel the probe.</param>
     /// <returns>The watch-probe diagnostic, or a note that nothing is being watched.</returns>
     public async Task<object> DebugWatchProbeAsync(CancellationToken ct = default)
@@ -655,6 +655,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
 
                     if (PickTarget() is null)
                     {
+                        _watch.StopWatching(); // nothing to harvest: don't keep pulling the last stream
                         SetActive(null, null, null, Loc.T("Status_NoDropsToHarvest"));
                         _bus.Publish(new AllDropsHarvestedEvent());
                         await WakeableDelayAsync(TimeSpan.FromMinutes(5), ct).ConfigureAwait(false);
@@ -666,6 +667,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
                     var picked = await PickWatchableTargetAsync(ct).ConfigureAwait(false);
                     if (picked is null)
                     {
+                        _watch.StopWatching();
                         SetActive(null, null, null, Loc.T("Status_WaitingForStream"));
                         QueueChannelRefresh(null, ct); // still show the harvestable games (offline) while waiting
                         await WakeableDelayAsync(TimeSpan.FromMinutes(1), ct).ConfigureAwait(false);
@@ -699,6 +701,10 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             _bus.Publish(new HarvesterErrorEvent(ex.Message));
             Log($"Harvesting loop error: {ex.Message}", HarvesterLogLevel.Error);
         }
+        finally
+        {
+            _watch.StopWatching(); // stopped, logged out, or crashed: stop pulling the stream
+        }
     }
 
     /// <summary>Watch a single channel until its active drop completes, it goes offline, or a
@@ -716,8 +722,8 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             Log($"Watching: {channel.DisplayName} [{campaign.Game.Name}]");
         _lastPreemptCheck = DateTimeOffset.UtcNow; // don't re-evaluate priority for a few minutes
 
-        // stream-less watch: send the minute-watched heartbeat on the active transport, then read the
-        // real progress back from the inventory afterwards
+        // watch on the active transport (start pulling the stream, or send the heartbeat on a fallback),
+        // then read the real progress back from the inventory afterwards
         await SendWatchAsync(channel, ct).ConfigureAwait(false);
         await SyncInventorySafeAsync(ct).ConfigureAwait(false);
         var initial = FirstHarvestableDrop(campaign);
@@ -776,7 +782,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
                 ResetStall();
             }
 
-            // send the minute-watched heartbeat (this advances the drop), then read progress back
+            // keep watching (this advances the drop), then read progress back
             await SendWatchAsync(channel, ct).ConfigureAwait(false);
             await SyncInventorySafeAsync(ct).ConfigureAwait(false);
 
@@ -1118,8 +1124,8 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
         _announceSeeded = true;
     }
 
-    /// <summary>Send one minute-watched heartbeat; surfaces auth expiry, swallows transient errors.</summary>
-    /// <param name="channel">The channel to send the heartbeat for.</param>
+    /// <summary>Watch the channel on the active transport; surfaces auth expiry, swallows transient errors.</summary>
+    /// <param name="channel">The channel to watch.</param>
     /// <param name="ct">Cancels the request on shutdown.</param>
     async Task SendWatchAsync(TwitchChannel channel, CancellationToken ct)
     {
@@ -1130,9 +1136,10 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
                 ReportConnection(true);
             else
             {
-                // A single un-acked beacon heartbeat is a routine transient blip that the next tick retries;
-                // keep it out of the user-facing log (Debug). Sustained failure surfaces via ReportConnection.
-                Log($"Watch heartbeat not acknowledged - retrying in {TwitchConstants.WatchInterval.TotalSeconds:0}s.", HarvesterLogLevel.Debug);
+                // A single un-acked watch is a routine transient blip that the next tick retries; keep it
+                // out of the user-facing log (Debug). Sustained failure surfaces via ReportConnection.
+                var why = _watch.LastError is { } e ? $" ({e})" : "";
+                Log($"Watch on '{_watch.CurrentTransport}' not acknowledged{why} - retrying in {TwitchConstants.WatchInterval.TotalSeconds:0}s.", HarvesterLogLevel.Debug);
                 ReportConnection(false);
             }
         }
@@ -1145,7 +1152,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
         }
         catch
         {
-            Log($"Watch heartbeat failed (transient) - retrying in {TwitchConstants.WatchInterval.TotalSeconds:0}s.", HarvesterLogLevel.Debug);
+            Log($"Watch failed (transient) - retrying in {TwitchConstants.WatchInterval.TotalSeconds:0}s.", HarvesterLogLevel.Debug);
             ReportConnection(false); // next watch tick retries
         }
     }
@@ -2622,6 +2629,7 @@ public sealed class HarvesterOrchestrator : IHarvesterOrchestrator
             WatchBeaconUrl = _watch.BeaconUrl,
             WatchTransport = _watch.CurrentTransport,
             WatchSelfHeal = new { Rotating = _rotating, Exhausted = _selfHealExhausted, OutageActive = _outageActive },
+            WatchStream = _watch.StreamStatus,
             Active = new
             {
                 Channel = ActiveChannel?.DisplayName,
