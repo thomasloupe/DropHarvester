@@ -1,7 +1,7 @@
 # DropHarvester headless daemon - run it as a background service.
 #
 #   docker compose up -d --build          # build + start
-#   docker compose logs -f                # first run: shows the twitch.tv/activate URL + code
+#   docker compose logs -f                # first run: shows the Twitch sign-in link (see README)
 #   curl http://localhost:8080/status     # live JSON state
 #
 # The token + settings + stats persist in the named volume, so restarts resume without re-login.

@@ -16,14 +16,14 @@ so it earns drops on near-zero bandwidth. Modern UI with a number of extra featu
 ### Core harvesting
 
 - **Stream-less drop harvesting** - no video download: every ~10s it re-reads the stream's lowest-quality playlist and sends a headers-only (HEAD) request for each new segment, plus the minute-watched heartbeat.
-- **Automatic watch-method failover** - if Twitch stops crediting one watch method, it tries the backups and stays on whichever works, so a Twitch-side change costs minutes, not days.
+- **Automatic heartbeat failover** - the stream watch always runs; if drops stop crediting, it rotates the heartbeat sent alongside it and stays on whichever works.
 - **Automatic campaign discovery** from your linked accounts.
 - **Drops-enabled validation** - only harvests channels that can actually earn the drop.
 - **Auto-claim** the instant a drop completes, with a safety net that re-scans and retries so nothing is left unclaimed through a missed event, outage, or restart.
 - **Auto start/stop** as campaigns appear and finish.
 - **Sharded PubSub websockets** - track many channels for real-time online/offline and drop events.
 - **Channel-points auto-claim** on the watched channel (optional).
-- **Persistent login** - device-code OAuth; the token is saved and reused.
+- **Persistent login** - sign in once in the built-in Twitch window; the token is saved and reused.
 
 ### What to harvest, and in what order
 
@@ -176,9 +176,9 @@ dotnet run   -f net10.0-maccatalyst
 ## Usage
 
 1. Launch the app and open the **Status** tab.
-2. Click **Log in with Twitch** - a browser opens to `twitch.tv/activate`; enter
-   the shown code and approve. (You must have linked your game accounts on Twitch
-   yourself; the app only discovers campaigns for already-linked accounts.)
+2. Click **Log in with Twitch** and sign in with your Twitch username and password
+   (Google sign-in isn't supported). You must have linked your game accounts on Twitch
+   yourself; the app only discovers campaigns for already-linked accounts.
 3. Harvesting starts automatically. Use **Settings** to set priority/excluded games,
    the de-dupe and harvest-unlinked lists, the drop-claimed sound, notifications,
    webhooks, tray, autostart, and the debug server.
@@ -196,12 +196,12 @@ for people who'd rather run DropHarvester on a server / NAS / Raspberry Pi. It s
 # Build + start in the background
 docker compose up -d --build
 
-# First run only: watch the logs for the Twitch login prompt
+# First run only: the logs print a Twitch sign-in link
 docker compose logs -f
-#   ==================== TWITCH LOGIN REQUIRED ====================
-#     1) On any device, open:  https://www.twitch.tv/activate?device-code=XXXXXXXX
-#     2) Enter this code:      XXXXXXXX
-# Approve it once; the token is saved to the volume and reused on every restart.
+# Open it in any browser and sign in. You land on twitch.tv with #access_token=...
+# in the address bar; hand that whole address to the container:
+docker compose exec dropharvester sh -c 'cat > /data/login.txt'   # paste, Enter, Ctrl+D
+# The token is saved to the volume and reused on every restart.
 
 # Live state / liveness
 curl http://localhost:8080/status
@@ -217,14 +217,14 @@ docker run -d --name dropharvester \
   -e DH_WEBHOOK_URL="https://discord.com/api/webhooks/..." \
   -v dropharvester-data:/data -p 8080:8080 \
   dropharvester-daemon
-docker logs -f dropharvester          # first-run login code
+docker logs -f dropharvester          # first-run sign-in link
 ```
 
 Notes:
 
-- **Auth is one-time.** The device-code login only happens on first run (or after the
-  token is revoked); the token persists in the `/data` volume. If it ever expires, the
-  daemon logs a fresh code and pauses harvesting until you approve it.
+- **Auth is one-time.** Sign in on first run (or after the token is revoked); the token
+  persists in the `/data` volume. Instead of `login.txt` you can set `DH_TWITCH_TOKEN` to the
+  address and restart. If the token ever expires, the daemon pauses and prints the link again.
 - **You still link game accounts on Twitch yourself** - the harvester only discovers
   campaigns for already-linked accounts.
 - **Config is env-vars.** See [`.env.example`](.env.example) for the full list
@@ -258,17 +258,16 @@ The solution is three projects:
 
 - **Harvesting engine** (`DropHarvester.Core/Services/Twitch/`) - pure .NET (`HttpClient`,
   `ClientWebSocket`, `System.Text.Json`), identical on both OSes:
-  - `TwitchAuthService` - device-code OAuth + token validation/persistence.
+  - `TwitchAuthService` - browser sign-in token login + validation/persistence.
   - `GqlClient` - Twitch private GraphQL (persisted queries + the raw watch
     mutation), with bounded retry/backoff on transient failures.
   - `InventoryService` - campaign/drop discovery, progress sync, claiming, and the
     claimed-reward history.
-  - `WatchService` - the watch, cascading across transports so the orchestrator can
-    self-heal onto whichever Twitch is crediting: the HLS stream watch first
-    (`HlsWatcher` - playback token, usher playlist, then a HEAD for each new segment
-    every ~10s, with the heartbeat alongside), then the minute-watched heartbeat alone
-    as fallbacks (the `track` POST on beacon/spade/trowel hosts, then the
-    `sendSpadeEvents` GraphQL mutation).
+  - `WatchService` - the watch: the HLS stream watch on every tick (`HlsWatcher` -
+    playback token, usher playlist, then a HEAD for each new segment every ~10s) with the
+    minute-watched heartbeat alongside, on one of several transports the orchestrator can
+    rotate through when progress stalls (the `track` POST on beacon/spade/trowel hosts,
+    then the `sendSpadeEvents` GraphQL mutation).
   - `WebsocketPool` - sharded PubSub (LISTEN/PING/reconnect).
   - `ChannelManager` - live drops-enabled channel discovery + stream state.
   - `HarvesterOrchestrator` - the run loop tying it together; emits `HarvesterEvent`s and

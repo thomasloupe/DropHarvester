@@ -8,32 +8,36 @@ namespace DropHarvester.Models.Twitch;
 public static class TwitchConstants
 {
     // ----- Client identities -----
-    // The device-code login flow runs as the Android TV app client (it has the device grant
-    // enabled). GraphQL requests use the web client id, same as a browser.
+    // Login and GraphQL both run as the Android app client: a token only works with the client id it
+    // was issued to, and this client is not held to the web client's integrity checks.
     public const string AndroidAppClientId = "kd1unb4b3q4t58fwlpcbzcbnm76a8fp";
     public const string WebClientId = "kimne78kx3ncx6brgo4mv6wki5h1ko";
     public const string SmartboxClientId = "ue6666qo983tsx6so1t0vnawi233wa";
 
     public const string AndroidUserAgent =
-        "Dalvik/2.1.0 (Linux; U; Android 16; SM-S911B Build/TP1A.220624.014) tv.twitch.android.app/25.3.0/2503006";
+        "Dalvik/2.1.0 (Linux; U; Android 16; SM-S911B Build/TP1A.220624.014) tv.twitch.android.app/31.8.0/3108006";
     public const string WebUserAgent =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36";
 
     // ----- Endpoints -----
-    public const string OAuthDeviceUrl = "https://id.twitch.tv/oauth2/device";
-    public const string OAuthTokenUrl = "https://id.twitch.tv/oauth2/token";
     public const string OAuthValidateUrl = "https://id.twitch.tv/oauth2/validate";
-    public const string DeviceCodeGrantType = "urn:ietf:params:oauth:grant-type:device_code";
-    public const string ActivateUrl = "https://www.twitch.tv/activate";
+
+    /// <summary>Twitch's sign-in page set up to finish with an implicit-grant redirect for the Android app
+    /// client: once the user signs in, the browser lands on <see cref="BrowserLoginRedirectPrefix"/> with
+    /// <c>#access_token=...</c> in the URL fragment.</summary>
+    public const string BrowserLoginUrl =
+        "https://www.twitch.tv/login?client_id=" + AndroidAppClientId +
+        "&redirect_params=client_id%3D" + AndroidAppClientId +
+        "%26redirect_uri%3Dhttps%253A%252F%252Fwww.twitch.tv%252F%26response_type%3Dtoken";
+
+    /// <summary>Where the browser sign-in redirects to; the access token rides in the fragment.</summary>
+    public const string BrowserLoginRedirectPrefix = "https://www.twitch.tv/";
 
     public const string GqlUrl = "https://gql.twitch.tv/gql";
     public const string PubSubUrl = "wss://pubsub-edge.twitch.tv/v1";
     /// <summary>Usher's live HLS master playlist for a channel ({0} = login); takes the playback token's
     /// <c>sig</c> and <c>token</c> as query parameters.</summary>
     public const string UsherChannelHlsUrl = "https://usher.ttvnw.net/api/channel/hls/{0}.m3u8";
-
-    /// <summary>Login-code activation needs no scopes (empty string).</summary>
-    public const string OAuthScopes = "";
 
     // ----- GraphQL persisted-query hashes (operationName -> sha256Hash) -----
     // Update here if Twitch rotates them.

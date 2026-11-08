@@ -10,40 +10,38 @@ using DropHarvester.Models.Twitch;
 namespace DropHarvester.Services.Twitch;
 
 /// <summary>
-/// The "watch" that advances drop progress. Twitch periodically changes which kind of watch it credits,
-/// so this keeps an ordered list of transports and can rotate through it (driven by the orchestrator's
-/// watchdog). The default is the HLS stream watch (<see cref="HlsWatcher"/>): read the channel's live
-/// playlist and HEAD each new segment, with the minute-watched heartbeat still sent alongside - since Oct
-/// 2026 that is the only thing Twitch credits. The fallbacks are the heartbeat-only transports that used
-/// to credit on their own: the classic form-POST to the "track" endpoint on several interchangeable hosts
+/// The "watch" that advances drop progress. Every watch tick pulls the channel's live stream
+/// (<see cref="HlsWatcher"/>: read the live playlist and HEAD each new segment, no video downloaded) and
+/// sends a minute-watched heartbeat alongside it, as a browser player does. Twitch only credits accounts
+/// that pull the stream, so the stream watch always runs while a channel is watched. What varies is the
+/// heartbeat: an ordered list of heartbeat transports the orchestrator's watchdog can rotate through when
+/// progress stalls - the form-POST to the "track" endpoint on several interchangeable hosts
 /// (beacon/spade/trowel), then the GraphQL <c>sendSpadeEvents</c> mutation. The POST sends plain base64
-/// JSON; the GQL mutation sends the same event gzipped+base64 as the GZIP_B64 "twilight" input. No video
-/// is downloaded on any of them. An ack means "accepted", not "credited": real crediting is judged by
-/// observed drop progress, which is why the orchestrator only rotates transports when progress stalls.
+/// JSON; the GQL mutation sends the same event gzipped+base64 as the GZIP_B64 "twilight" input. An ack
+/// means "accepted", not "credited": real crediting is judged by observed drop progress.
 /// </summary>
 public interface IWatchService
 {
-    /// <summary>The resolved beacon/spade endpoint the POST transport prefers, or null until resolved.</summary>
+    /// <summary>The resolved beacon/spade endpoint the POST heartbeat prefers, or null until resolved.</summary>
     string? BeaconUrl { get; }
 
-    /// <summary>Human-readable name of the transport currently used to send watch minutes (for logging
-    /// and the debug snapshot), or a placeholder before the transport list has been built.</summary>
+    /// <summary>Human-readable name of the watch in use - the stream watch plus the active heartbeat
+    /// transport (for logging and the debug snapshot), or a placeholder before the list has been built.</summary>
     string CurrentTransport { get; }
 
-    /// <summary>Whether there is at least one alternate transport to rotate to when progress stalls.</summary>
+    /// <summary>Whether there is at least one alternate heartbeat transport to rotate to when progress stalls.</summary>
     bool HasBackupTransports { get; }
 
-    /// <summary>Why the active transport last failed, when it reports one (the HLS watch does), else null.</summary>
+    /// <summary>Why the stream watch last failed, or null when it has no error to report.</summary>
     string? LastError { get; }
 
     /// <summary>Debug-snapshot view of the HLS stream watch (running, variant, segments, last error), or
     /// null if it hasn't run this session.</summary>
     object? StreamStatus { get; }
 
-    /// <summary>Watch the channel on the active transport, called once per watch tick. On the HLS transport
-    /// this keeps the background stream watch on this channel (and sends the minute-watched heartbeat
-    /// alongside); on a heartbeat transport it sends one minute-watched event. Returns true on the
-    /// transport's ack (stream being pulled for HLS, HTTP 204 for POST, statusCode 204 for GQL).</summary>
+    /// <summary>Watch the channel, called once per watch tick: keep the background stream watch on this
+    /// channel and send one minute-watched heartbeat on the active heartbeat transport. Returns true while
+    /// the stream is being pulled; the heartbeat's ack does not decide it.</summary>
     /// <param name="channel">Channel to credit the watch minute to.</param>
     /// <param name="ct">Token to cancel the send.</param>
     Task<bool> SendWatchAsync(TwitchChannel channel, CancellationToken ct = default);
@@ -52,38 +50,40 @@ public interface IWatchService
     /// The next <see cref="SendWatchAsync"/> starts it again.</summary>
     void StopWatching();
 
-    /// <summary>Advance the active transport to the next not-yet-tried candidate in a single self-heal
-    /// pass. The first call after a good run starts the pass from the known-good primary. Returns true if
-    /// it moved to a fresh transport this pass; false once every alternate has been tried.</summary>
-    /// <returns>True if the active transport advanced; false when the pass is exhausted.</returns>
+    /// <summary>Advance the active heartbeat transport to the next not-yet-tried candidate in a single
+    /// self-heal pass; the stream watch keeps running throughout. The first call after a good run starts
+    /// the pass from the known-good primary. Returns true if it moved to a fresh transport this pass;
+    /// false once every alternate has been tried.</summary>
+    /// <returns>True if the active heartbeat transport advanced; false when the pass is exhausted.</returns>
     bool RotateToNextTransport();
 
-    /// <summary>Adopt the active transport as the known-good primary (called when a real credit lands), so
-    /// a rotation that restored progress sticks and later stalls rotate outward from it.</summary>
+    /// <summary>Adopt the active heartbeat transport as the known-good primary (called when a real credit
+    /// lands), so a rotation that restored progress sticks and later stalls rotate outward from it.</summary>
     void MarkCurrentGood();
 
-    /// <summary>Return the active transport to the last known-good primary and end the pass (called when a
-    /// full rotation restored nothing - a Twitch-side outage rather than a transport problem).</summary>
+    /// <summary>Return the active heartbeat transport to the last known-good primary and end the pass
+    /// (called when a full rotation restored nothing - a Twitch-side outage rather than a transport problem).</summary>
     void SettleToPrimary();
 
-    /// <summary>Reset the active and primary transport back to the first (most-preferred) candidate. Called
-    /// on a fresh harvest start so a prior run's rotation doesn't carry over.</summary>
+    /// <summary>Reset the active and primary heartbeat transport back to the first (most-preferred)
+    /// candidate. Called on a fresh harvest start so a prior run's rotation doesn't carry over.</summary>
     void ResetTransport();
 
-    /// <summary>Debug-only: run one watch on EVERY transport and return the full round-trip for each (for
-    /// HLS each step of a fresh playback session; for the heartbeats the decoded payload, endpoint, ack
-    /// status and raw response) so it's obvious at a glance which transports Twitch is accepting right now.</summary>
+    /// <summary>Debug-only: run one full playback pass of the stream watch, then one send on EVERY heartbeat
+    /// transport, and return the full round-trip for each (for the stream each step of a fresh playback
+    /// session; for the heartbeats the decoded payload, endpoint, ack status and raw response) so it's
+    /// obvious at a glance what Twitch is accepting right now.</summary>
     /// <param name="channel">Channel to probe the watch for.</param>
     /// <param name="ct">Token to cancel the sends.</param>
     /// <returns>A diagnostic object describing what was sent and what each transport returned.</returns>
     Task<object> ProbeAsync(TwitchChannel channel, CancellationToken ct = default);
 }
 
-/// <summary>Default <see cref="IWatchService"/>: the HLS stream watch first, then the minute-watched
-/// heartbeat cascading across the POST "track" hosts and the GraphQL mutation.</summary>
+/// <summary>Default <see cref="IWatchService"/>: the HLS stream watch on every tick, with the minute-watched
+/// heartbeat sent alongside on one of the POST "track" hosts or the GraphQL mutation.</summary>
 public sealed class WatchService : IWatchService
 {
-    const string HlsTransportName = "HLS stream";
+    const string StreamWatchName = "HLS stream";
 
     static readonly JsonSerializerOptions Compact = new() { WriteIndented = false };
 
@@ -98,14 +98,14 @@ public sealed class WatchService : IWatchService
     static readonly Regex SettingsJsPattern =
         new("(https://(?:static\\.twitchcdn\\.net|assets\\.twitch\\.tv)/config/settings\\.[^\"'\\s]+\\.js)", RegexOptions.Compiled);
 
-    /// <summary>How a single watch transport watches: pulling the HLS stream, or sending the minute-watched
-    /// event as a form-POST or via the GraphQL mutation.</summary>
-    enum TransportKind { Hls, Post, Gql }
+    /// <summary>How a heartbeat transport sends the minute-watched event: as a form-POST or via the
+    /// GraphQL mutation.</summary>
+    enum TransportKind { Post, Gql }
 
-    /// <summary>One watch transport: a friendly name, how it sends, and (for POST) which host to send to.</summary>
+    /// <summary>One heartbeat transport: a friendly name, how it sends, and (for POST) which host to send to.</summary>
     /// <param name="Name">Human-readable label shown in logs and the debug snapshot.</param>
-    /// <param name="Kind">Whether this transport is the HLS watch, a form-POST, or the GraphQL mutation.</param>
-    /// <param name="Url">The POST "track" endpoint, or null for the HLS and GQL transports.</param>
+    /// <param name="Kind">Whether this transport is a form-POST or the GraphQL mutation.</param>
+    /// <param name="Url">The POST "track" endpoint, or null for the GQL transport.</param>
     sealed record Transport(string Name, TransportKind Kind, string? Url);
 
     readonly ITwitchAuth _auth;
@@ -118,23 +118,25 @@ public sealed class WatchService : IWatchService
 
     readonly List<Transport> _transports = new();
     bool _built;
-    int _primaryIndex;                 // last known-good transport
-    int _currentIndex;                 // transport being sent on right now
+    int _primaryIndex;                 // last known-good heartbeat transport
+    int _currentIndex;                 // heartbeat transport being sent on right now
     bool _passActive;                  // walking a single self-heal pass
     readonly HashSet<int> _triedThisPass = new();
 
-    /// <summary>The resolved beacon/spade endpoint the POST transport prefers, or null until resolved.</summary>
+    /// <summary>The resolved beacon/spade endpoint the POST heartbeat prefers, or null until resolved.</summary>
     public string? BeaconUrl => _beaconUrl;
 
-    /// <summary>Name of the transport currently used to send watch minutes, or a placeholder pre-build.</summary>
+    /// <summary>"HLS stream + &lt;heartbeat transport&gt;", or a placeholder before the list is built.</summary>
     public string CurrentTransport =>
-        _built && _currentIndex >= 0 && _currentIndex < _transports.Count ? _transports[_currentIndex].Name : "(resolving)";
+        _built && _currentIndex >= 0 && _currentIndex < _transports.Count
+            ? $"{StreamWatchName} + {_transports[_currentIndex].Name}"
+            : "(resolving)";
 
-    /// <summary>Whether at least one alternate transport exists to rotate to.</summary>
+    /// <summary>Whether at least one alternate heartbeat transport exists to rotate to.</summary>
     public bool HasBackupTransports => _built && _transports.Count > 1;
 
-    /// <summary>Why the HLS watch last failed while it's the active transport, else null.</summary>
-    public string? LastError => IsActive(TransportKind.Hls) ? _hls.LastError : null;
+    /// <summary>Why the stream watch last failed, or null.</summary>
+    public string? LastError => _hls.LastError;
 
     /// <summary>Debug-snapshot view of the HLS stream watch, or null if it hasn't run this session.</summary>
     public object? StreamStatus => _hls.Status;
@@ -152,46 +154,30 @@ public sealed class WatchService : IWatchService
         _hls = new HlsWatcher(gql, _http);
     }
 
-    /// <summary>Watches an online channel on the active transport and reports its ack. The HLS transport
-    /// keeps the background stream watch on this channel and sends the minute-watched heartbeat alongside,
-    /// as a browser player does; a heartbeat transport sends one event and stops any stream watch.</summary>
+    /// <summary>Watches an online channel: keeps the background stream watch on it and sends the
+    /// minute-watched heartbeat on the active heartbeat transport alongside, as a browser player does.</summary>
     /// <param name="channel">Channel to credit the watch minute to.</param>
     /// <param name="ct">Token to cancel the send.</param>
-    /// <returns>True when the active transport acks; false when offline, unbuilt, or on failure.</returns>
+    /// <returns>True while the stream is being pulled; false when offline, unbuilt, or the stream watch fails.</returns>
     public async Task<bool> SendWatchAsync(TwitchChannel channel, CancellationToken ct = default)
     {
         if (!channel.Online || string.IsNullOrEmpty(channel.BroadcastId))
             return false;
 
         await EnsureTransportsAsync(ct).ConfigureAwait(false);
-        if (_transports.Count == 0)
-            return false;
-
-        var t = _transports[Math.Clamp(_currentIndex, 0, _transports.Count - 1)];
-        if (t.Kind != TransportKind.Hls)
-        {
-            // a fallback is being tried on its own merits, so it must not be propped up by the stream watch
-            _hls.Stop();
-            return await SendViaAsync(t, channel, ct).ConfigureAwait(false);
-        }
 
         var watching = await _hls.WatchAsync(channel, ct).ConfigureAwait(false);
-        // The heartbeat no longer credits by itself, but a real player still sends it; its ack decides nothing.
-        if (_transports.FirstOrDefault(x => x.Kind == TransportKind.Post) is { } beacon)
-            await SendViaAsync(beacon, channel, ct).ConfigureAwait(false);
+        // The heartbeat doesn't credit by itself, but a real player sends it; its ack decides nothing.
+        if (_transports.Count > 0)
+            await SendViaAsync(_transports[Math.Clamp(_currentIndex, 0, _transports.Count - 1)], channel, ct).ConfigureAwait(false);
         return watching;
     }
 
     /// <summary>Stop the background stream watch, if one is running.</summary>
     public void StopWatching() => _hls.Stop();
 
-    /// <summary>Whether the active transport is of the given kind.</summary>
-    /// <param name="kind">Transport kind to test.</param>
-    bool IsActive(TransportKind kind)
-        => _built && _currentIndex >= 0 && _currentIndex < _transports.Count && _transports[_currentIndex].Kind == kind;
-
-    /// <summary>Advance the active transport to the next not-yet-tried candidate in the current pass.</summary>
-    /// <returns>True if the active transport advanced to a fresh candidate; false when the pass is exhausted.</returns>
+    /// <summary>Advance the active heartbeat transport to the next not-yet-tried candidate in the current pass.</summary>
+    /// <returns>True if the active heartbeat transport advanced to a fresh candidate; false when the pass is exhausted.</returns>
     public bool RotateToNextTransport()
     {
         if (!_built || _transports.Count <= 1)
@@ -211,17 +197,13 @@ public sealed class WatchService : IWatchService
             if (_triedThisPass.Add(idx))
             {
                 _currentIndex = idx;
-                // Stop the stream watch now rather than on the next tick, so a credit it was still earning
-                // can't be mistaken for this fallback restoring progress.
-                if (_transports[idx].Kind != TransportKind.Hls)
-                    _hls.Stop();
                 return true;
             }
         }
         return false;
     }
 
-    /// <summary>Adopt the active transport as the known-good primary and end the pass.</summary>
+    /// <summary>Adopt the active heartbeat transport as the known-good primary and end the pass.</summary>
     public void MarkCurrentGood()
     {
         _primaryIndex = _currentIndex;
@@ -229,7 +211,7 @@ public sealed class WatchService : IWatchService
         _triedThisPass.Clear();
     }
 
-    /// <summary>Return the active transport to the last known-good primary and end the pass.</summary>
+    /// <summary>Return the active heartbeat transport to the last known-good primary and end the pass.</summary>
     public void SettleToPrimary()
     {
         _currentIndex = _primaryIndex;
@@ -237,7 +219,7 @@ public sealed class WatchService : IWatchService
         _triedThisPass.Clear();
     }
 
-    /// <summary>Reset the active and primary transport back to the first (most-preferred) candidate.</summary>
+    /// <summary>Reset the active and primary heartbeat transport back to the first (most-preferred) candidate.</summary>
     public void ResetTransport()
     {
         _primaryIndex = 0;
@@ -246,11 +228,11 @@ public sealed class WatchService : IWatchService
         _triedThisPass.Clear();
     }
 
-    /// <summary>Debug-only: run one watch on every transport and report each round-trip so it's clear
-    /// which transports Twitch is accepting right now.</summary>
+    /// <summary>Debug-only: run one playback pass of the stream watch and one send on every heartbeat
+    /// transport, and report each round-trip so it's clear what Twitch is accepting right now.</summary>
     /// <param name="channel">Channel to probe the watch for.</param>
     /// <param name="ct">Token to cancel the sends.</param>
-    /// <returns>A diagnostic object: decoded payload plus a per-transport result list.</returns>
+    /// <returns>A diagnostic object: decoded payload plus a per-transport result list, stream watch first.</returns>
     public async Task<object> ProbeAsync(TwitchChannel channel, CancellationToken ct = default)
     {
         var userId = _auth.State.UserId ?? "";
@@ -261,15 +243,21 @@ public sealed class WatchService : IWatchService
         await EnsureTransportsAsync(ct).ConfigureAwait(false);
 
         var results = new List<object>();
+        try
+        {
+            results.Add(new { Transport = StreamWatchName, Probe = await _hls.ProbeAsync(channel, ct).ConfigureAwait(false) });
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception ex)
+        {
+            results.Add(new { Transport = StreamWatchName, Error = $"{ex.GetType().Name}: {ex.Message}" });
+        }
+
         foreach (var t in _transports)
         {
             try
             {
-                if (t.Kind == TransportKind.Hls)
-                {
-                    results.Add(new { Transport = t.Name, Probe = await _hls.ProbeAsync(channel, ct).ConfigureAwait(false) });
-                }
-                else if (t.Kind == TransportKind.Post)
+                if (t.Kind == TransportKind.Post)
                 {
                     using var resp = await PostTrackAsync(t.Url!, EncodeBase64(evt), ct).ConfigureAwait(false);
                     var respBody = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
@@ -320,9 +308,8 @@ public sealed class WatchService : IWatchService
         };
     }
 
-    /// <summary>Send the minute-watched event on one transport, containing transport-level failures (a
-    /// transient error becomes a false so a bad transport can't kill the watch loop); a real 401 still
-    /// surfaces so login expiry is handled.</summary>
+    /// <summary>Send the minute-watched event on one heartbeat transport, containing every failure (a
+    /// transient error becomes a false so a bad transport can't kill the watch loop).</summary>
     /// <param name="t">The transport to send on.</param>
     /// <param name="channel">Channel the minute is credited to.</param>
     /// <param name="ct">Token to cancel the send.</param>
@@ -390,10 +377,9 @@ public sealed class WatchService : IWatchService
         return _http.SendAsync(req, ct);
     }
 
-    /// <summary>Builds the ordered transport list once: the HLS stream watch (what credits today), then the
-    /// heartbeat fallbacks - the resolved beacon URL (if any) followed by the hardcoded track hosts
-    /// (deduped), then the GraphQL mutation last. The heartbeats are kept for when Twitch flips back to
-    /// crediting them; the POST hosts lead them as the least detectable.</summary>
+    /// <summary>Builds the ordered heartbeat transport list once: the resolved beacon URL (if any) followed
+    /// by the hardcoded track hosts (deduped), then the GraphQL mutation last. The POST hosts lead as the
+    /// least detectable.</summary>
     /// <param name="ct">Token to cancel the URL lookups.</param>
     async Task EnsureTransportsAsync(CancellationToken ct)
     {
@@ -420,7 +406,6 @@ public sealed class WatchService : IWatchService
                 AddHost(h);
 
             _transports.Clear();
-            _transports.Add(new Transport(HlsTransportName, TransportKind.Hls, null));
             foreach (var h in hosts)
                 _transports.Add(new Transport(PostName(h), TransportKind.Post, h));
             _transports.Add(new Transport("GQL sendSpadeEvents", TransportKind.Gql, null));

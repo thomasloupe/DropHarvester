@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DropHarvester.Localization;
 using DropHarvester.Models;
+using DropHarvester.Models.Auth;
 using DropHarvester.Models.Events;
 using DropHarvester.Models.Twitch;
 using DropHarvester.Services;
@@ -11,7 +12,7 @@ using DropHarvester.Services.Twitch;
 namespace DropHarvester.ViewModels;
 
 /// <summary>
-/// Drives the Status tab: login (device-code flow) plus live harvesting status (active channel and
+/// Drives the Status tab: login (Twitch sign-in popup) plus live harvesting status (active channel and
 /// drop, websocket health, start/pause) fed by the harvester event bus.
 /// </summary>
 public partial class StatusViewModel : ObservableViewModel
@@ -22,7 +23,7 @@ public partial class StatusViewModel : ObservableViewModel
     readonly IUpdateService _update;
     readonly ISettingsStore _settings;
     readonly IChangelogPresenter _changelog;
-    CancellationTokenSource? _loginCts;
+    readonly ITwitchLoginPresenter _login;
 
     /// <summary>Subscribes to auth and harvester-event notifications, syncs login state, starts the per-second
     /// countdown, sets the version label, resumes harvesting if already logged in, and kicks off update checks.</summary>
@@ -31,8 +32,10 @@ public partial class StatusViewModel : ObservableViewModel
     /// <param name="bus">Event bus carrying live harvester status events.</param>
     /// <param name="update">Update service for checking and downloading new versions.</param>
     /// <param name="settings">Persisted settings store.</param>
+    /// <param name="changelog">Opens the "What's changed" popup.</param>
+    /// <param name="login">Opens the Twitch sign-in popup.</param>
     public StatusViewModel(ITwitchAuth auth, IHarvesterOrchestrator harvester, IHarvesterEventBus bus,
-        IUpdateService update, ISettingsStore settings, IChangelogPresenter changelog)
+        IUpdateService update, ISettingsStore settings, IChangelogPresenter changelog, ITwitchLoginPresenter login)
     {
         _auth = auth;
         _harvester = harvester;
@@ -40,6 +43,7 @@ public partial class StatusViewModel : ObservableViewModel
         _update = update;
         _settings = settings;
         _changelog = changelog;
+        _login = login;
 
         _auth.AuthChanged += OnAuthChanged;
         _bus.Event += OnHarvesterEvent;
@@ -130,9 +134,6 @@ public partial class StatusViewModel : ObservableViewModel
     [RelayCommand]
     void ToggleAccountReveal() => AccountRevealed = !AccountRevealed;
     [ObservableProperty] private bool _loginInProgress;
-    [ObservableProperty] private bool _showDeviceCode;
-    [ObservableProperty] private string _deviceCode = "";
-    [ObservableProperty] private string _verificationUri = "";
     [ObservableProperty] private string _loginHint = "";
 
     [ObservableProperty] private bool _harvestingActive;
@@ -407,7 +408,8 @@ public partial class StatusViewModel : ObservableViewModel
         HarvestingActive = _harvester.IsRunning;
     }
 
-    /// <summary>Runs the Twitch device-code login flow: shows the code, waits for authorization, and starts the harvester on success.</summary>
+    /// <summary>Runs the Twitch login: opens the sign-in popup, logs in with the token it returns, and starts
+    /// the harvester on success. Closing the popup cancels the login.</summary>
     [RelayCommand]
     async Task LogInAsync()
     {
@@ -415,29 +417,20 @@ public partial class StatusViewModel : ObservableViewModel
             return;
 
         LoginInProgress = true;
-        LoginHint = Loc.T("Login_Requesting");
-        _loginCts = new CancellationTokenSource();
+        LoginHint = "";
         try
         {
-            var device = await _auth.BeginDeviceLoginAsync(_loginCts.Token);
+            var token = await _login.SignInAsync();
+            if (token is null)
+            {
+                LoginHint = Loc.T("Login_Cancelled");
+                return;
+            }
 
-            DeviceCode = device.UserCode;
-            VerificationUri = string.IsNullOrWhiteSpace(device.VerificationUri)
-                ? "https://www.twitch.tv/activate"
-                : device.VerificationUri;
-            LoginHint = Loc.T("Login_GoToAndEnter", VerificationUri, device.UserCode);
-            ShowDeviceCode = true;
-
-            try { await Launcher.Default.OpenAsync(VerificationUri); } catch { }
-
-            var ok = await _auth.AwaitAuthorizationAsync(device, _loginCts.Token);
+            var ok = await _auth.LogInWithTokenAsync(token) == TokenLoginResult.Success;
             LoginHint = ok ? "" : Loc.T("Login_NotCompleted");
             if (ok)
                 await _harvester.StartAsync();
-        }
-        catch (OperationCanceledException)
-        {
-            LoginHint = Loc.T("Login_Cancelled");
         }
         catch (Exception ex)
         {
@@ -445,18 +438,11 @@ public partial class StatusViewModel : ObservableViewModel
         }
         finally
         {
-            ShowDeviceCode = false;
             LoginInProgress = false;
-            _loginCts?.Dispose();
-            _loginCts = null;
             SyncFromAuth();
             HarvestingActive = _harvester.IsRunning;
         }
     }
-
-    /// <summary>Cancels an in-progress login attempt.</summary>
-    [RelayCommand]
-    void CancelLogin() => _loginCts?.Cancel();
 
     /// <summary>Stops harvesting, logs out of Twitch, and resets the status display to idle.</summary>
     [RelayCommand]

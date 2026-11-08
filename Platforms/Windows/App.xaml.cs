@@ -12,11 +12,24 @@ public partial class App : MauiWinUIApplication
     // Kept alive for the process lifetime so the single-instance lock persists.
     static Mutex? _instanceMutex;
 
-    /// <summary>Enforces the single-instance lock, then initializes the WinUI application component.</summary>
+    /// <summary>Enforces the single-instance lock, points WebView2 at a writable data folder, then
+    /// initializes the WinUI application component.</summary>
     public App()
     {
         EnforceSingleInstance();
+        UseWritableWebViewDataFolder();
         this.InitializeComponent();
+    }
+
+    /// <summary>WebView2 keeps its browser data next to the exe by default, which isn't writable under
+    /// Program Files; put it in %LOCALAPPDATA%\DropHarvester\WebView2 instead (unless already set).</summary>
+    static void UseWritableWebViewDataFolder()
+    {
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WEBVIEW2_USER_DATA_FOLDER")))
+            return;
+        var dir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DropHarvester", "WebView2");
+        Environment.SetEnvironmentVariable("WEBVIEW2_USER_DATA_FOLDER", dir);
     }
 
     /// <summary>Builds the shared MAUI application hosted by this WinUI process.</summary>

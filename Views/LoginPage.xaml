@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:loc="clr-namespace:DropHarvester.Localization"
+             x:Class="DropHarvester.Views.LoginPage"
+             BackgroundColor="#CC000000">
+
+    <!-- Dimmed backdrop around the sign-in card -->
+    <Grid Padding="20">
+        <Border BackgroundColor="{StaticResource DhSurface}" Stroke="{StaticResource DhBorder}" StrokeThickness="1"
+                StrokeShape="RoundRectangle 14" Padding="0"
+                HorizontalOptions="Center" VerticalOptions="Fill"
+                WidthRequest="520">
+
+            <Grid RowDefinitions="Auto,Auto,*" Padding="18" RowSpacing="10">
+
+                <!-- Header -->
+                <Grid ColumnDefinitions="*,Auto">
+                    <Label Text="{loc:Tr Login_PageTitle}" Style="{StaticResource H1}" FontSize="18" VerticalOptions="Center" />
+                    <Button Grid.Column="1" Text="&#x2715;" Clicked="OnCloseClicked"
+                            BackgroundColor="{StaticResource DhSurface2}" TextColor="{StaticResource DhText}"
+                            BorderColor="{StaticResource DhBorder}" BorderWidth="1"
+                            WidthRequest="36" HeightRequest="36" CornerRadius="10" Padding="0" FontSize="14" />
+                </Grid>
+
+                <Label Grid.Row="1" Text="{loc:Tr Login_PageHint}" Style="{StaticResource Muted}" FontSize="13"
+                       LineBreakMode="WordWrap" />
+
+                <!-- Twitch's own sign-in page -->
+                <Border Grid.Row="2" StrokeThickness="0" StrokeShape="RoundRectangle 10" Padding="0">
+                    <WebView x:Name="LoginWebView" />
+                </Border>
+
+            </Grid>
+        </Border>
+    </Grid>
+</ContentPage>

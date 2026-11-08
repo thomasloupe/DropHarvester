@@ -1,3 +1,5 @@
+using DropHarvester.Models.Auth;
+using DropHarvester.Models.Twitch;
 using DropHarvester.Services;
 using DropHarvester.Services.Twitch;
 using Microsoft.Extensions.Hosting;
@@ -6,9 +8,9 @@ using Microsoft.Extensions.Logging;
 namespace DropHarvester.Daemon;
 
 /// <summary>
-/// Owns the daemon's lifecycle: ensure a valid Twitch session (resume a persisted token, or drive a
-/// device-code login printed to the logs), start the shared harvesting engine, and keep it running until
-/// the session expires (loop back to re-auth) or the host shuts down (stop cleanly, flush stats).
+/// Owns the daemon's lifecycle: ensure a valid Twitch session (resume a persisted token, or take one from
+/// a browser sign-in handed in via env or the login file), start the shared harvesting engine, and keep it
+/// running until the session expires (loop back to re-auth) or the host shuts down (stop cleanly, flush stats).
 /// </summary>
 public sealed class HarvesterWorker : BackgroundService
 {
@@ -88,51 +90,110 @@ public sealed class HarvesterWorker : BackgroundService
         }
     }
 
-    /// <summary>Resume a persisted session if the token still validates; otherwise drive a device-code
-    /// login (printed to the logs) and poll until authorized. Retries until it succeeds or is cancelled.</summary>
+    /// <summary>Resume a persisted session if the token still validates; otherwise log in with the token in
+    /// <c>DH_TWITCH_TOKEN</c>, or print the browser sign-in steps and wait for the resulting twitch.tv
+    /// address to be written to <c>login.txt</c> in the data dir. Waits until it succeeds or is cancelled.</summary>
     /// <param name="ct">Token that cancels the login loop on host shutdown.</param>
     /// <returns>True once authorized; false if cancelled before login completed.</returns>
     async Task<bool> EnsureAuthorizedAsync(CancellationToken ct)
     {
         try { if (await _auth.ValidateAsync(ct).ConfigureAwait(false)) { _log.LogInformation("Resumed saved Twitch session."); return true; } }
         catch (OperationCanceledException) { throw; }
-        catch { /* fall through to device login */ }
+        catch { /* fall through to a fresh login */ }
         if (_auth.IsLoggedIn) return true;
 
+        _status.SetAuth(false, null);
+
+        var envToken = Environment.GetEnvironmentVariable("DH_TWITCH_TOKEN");
+        if (!string.IsNullOrWhiteSpace(envToken))
+        {
+            if (await TryTokenLoginAsync(envToken, "DH_TWITCH_TOKEN", ct).ConfigureAwait(false))
+                return true;
+        }
+
+        var loginFile = Path.Combine(AppPaths.DataDir, "login.txt");
+        PrintLoginSteps(loginFile);
         while (!ct.IsCancellationRequested)
         {
-            _status.SetAuth(false, null);
-            try
+            if (File.Exists(loginFile))
             {
-                var device = await _auth.BeginDeviceLoginAsync(ct).ConfigureAwait(false);
-                var url = string.IsNullOrWhiteSpace(device.VerificationUri) ? "https://www.twitch.tv/activate" : device.VerificationUri;
-                var mins = Math.Max(1, (device.ExpiresIn > 0 ? device.ExpiresIn : 1800) / 60);
-
-                _log.LogWarning(" ");
-                _log.LogWarning("==================== TWITCH LOGIN REQUIRED ====================");
-                _log.LogWarning("  1) On any device, open:  {Url}", url);
-                _log.LogWarning("  2) Enter this code:      {Code}", device.UserCode);
-                _log.LogWarning("  Waiting for you to authorize (code expires in ~{Min} min)...", mins);
-                _log.LogWarning("===============================================================");
-                _log.LogWarning(" ");
-
-                if (await _auth.AwaitAuthorizationAsync(device, ct).ConfigureAwait(false))
+                string text;
+                try
                 {
-                    _log.LogInformation("Authorization complete.");
-                    return true;
+                    text = await File.ReadAllTextAsync(loginFile, ct).ConfigureAwait(false);
+                    File.Delete(loginFile); // it holds a credential: never leave it on disk
                 }
-                _log.LogWarning("Login was not completed (code expired or denied). Requesting a new code shortly...");
-            }
-            catch (OperationCanceledException) { throw; }
-            catch (Exception ex)
-            {
-                _log.LogError(ex, "Device-code login failed; retrying shortly...");
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex)
+                {
+                    _log.LogWarning("Couldn't read {File}: {Message}", loginFile, ex.Message);
+                    text = "";
+                }
+
+                if (text.Length > 0)
+                {
+                    if (await TryTokenLoginAsync(text, loginFile, ct).ConfigureAwait(false))
+                        return true;
+                    PrintLoginSteps(loginFile);
+                }
             }
 
-            try { await Task.Delay(TimeSpan.FromSeconds(15), ct).ConfigureAwait(false); }
+            try { await Task.Delay(TimeSpan.FromSeconds(3), ct).ConfigureAwait(false); }
             catch (OperationCanceledException) { throw; }
         }
         return false;
+    }
+
+    /// <summary>Log in with a token (or the sign-in redirect address carrying it) and log the outcome.</summary>
+    /// <param name="tokenOrUrl">The access token, or the twitch.tv address it arrived in.</param>
+    /// <param name="source">Where it came from, for the log line.</param>
+    /// <param name="ct">Token to cancel the validation.</param>
+    /// <returns>True when the session was saved.</returns>
+    async Task<bool> TryTokenLoginAsync(string tokenOrUrl, string source, CancellationToken ct)
+    {
+        TokenLoginResult result;
+        try { result = await _auth.LogInWithTokenAsync(tokenOrUrl, ct).ConfigureAwait(false); }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "Logging in with the token from {Source} failed.", source);
+            return false;
+        }
+
+        switch (result)
+        {
+            case TokenLoginResult.Success:
+                _log.LogInformation("Logged in with the token from {Source}.", source);
+                return true;
+            case TokenLoginResult.NoToken:
+                _log.LogWarning("No access token found in {Source}. It should be the twitch.tv address containing #access_token=.", source);
+                break;
+            case TokenLoginResult.WrongClient:
+                _log.LogWarning("The token from {Source} belongs to a different Twitch app. Use the sign-in link below to get one.", source);
+                break;
+            default:
+                _log.LogWarning("Twitch rejected the token from {Source} (expired or revoked).", source);
+                break;
+        }
+        return false;
+    }
+
+    /// <summary>Prints the browser sign-in steps: open the sign-in link anywhere, then hand the resulting
+    /// twitch.tv address back via the login file (no restart) or <c>DH_TWITCH_TOKEN</c> (restart).</summary>
+    /// <param name="loginFile">Path of the file the daemon watches for the address.</param>
+    void PrintLoginSteps(string loginFile)
+    {
+        _log.LogWarning(" ");
+        _log.LogWarning("==================== TWITCH LOGIN REQUIRED ====================");
+        _log.LogWarning("  1) In any browser, open:");
+        _log.LogWarning("     {Url}", TwitchConstants.BrowserLoginUrl);
+        _log.LogWarning("  2) Sign in with your Twitch username and password. You land on");
+        _log.LogWarning("     twitch.tv with #access_token=... in the address bar - copy that address.");
+        _log.LogWarning("  3) Write it to {File} (picked up within seconds),", loginFile);
+        _log.LogWarning("     or set DH_TWITCH_TOKEN to it and restart the container.");
+        _log.LogWarning("  Waiting for the login...");
+        _log.LogWarning("===============================================================");
+        _log.LogWarning(" ");
     }
 
     /// <summary>Builds a display label for the logged-in account, preferring display name, then username, then user id.</summary>

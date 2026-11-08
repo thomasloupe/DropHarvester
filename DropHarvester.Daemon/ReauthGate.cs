@@ -2,7 +2,7 @@ namespace DropHarvester.Daemon;
 
 /// <summary>
 /// One-shot signal that lets the event sink tell the worker the Twitch session expired and harvesting
-/// must pause for a fresh device-code login. The worker awaits <see cref="WaitAsync"/>; the sink
+/// must pause for a fresh login. The worker awaits <see cref="WaitAsync"/>; the sink
 /// calls <see cref="Request"/> on a LoginExpired event; the worker <see cref="Reset"/>s before the
 /// next cycle.
 /// </summary>

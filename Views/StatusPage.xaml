@@ -82,25 +82,6 @@
                 </VerticalStackLayout>
             </Border>
 
-            <!-- ===== Device-code prompt ===== -->
-            <Border Style="{StaticResource Card}" IsVisible="{Binding ShowDeviceCode}">
-                <VerticalStackLayout Spacing="12">
-                    <Label Text="{loc:Tr Status_AuthorizeHeader}" Style="{StaticResource SectionLabel}" />
-                    <Label Style="{StaticResource Muted}"
-                           Text="{loc:Tr Status_AuthorizeBody}" />
-                    <Label Text="{Binding DeviceCode}"
-                           TextColor="{StaticResource DhAccent}"
-                           FontSize="40" FontAttributes="Bold"
-                           CharacterSpacing="6"
-                           HorizontalTextAlignment="Center" />
-                    <Label Text="{Binding VerificationUri}"
-                           Style="{StaticResource Muted}"
-                           HorizontalTextAlignment="Center" />
-                    <Button Text="{loc:Tr Common_Cancel}" Style="{StaticResource GhostButton}"
-                            Command="{Binding CancelLoginCommand}" />
-                </VerticalStackLayout>
-            </Border>
-
             <!-- ===== Hint / status line ===== -->
             <Label Text="{Binding LoginHint}"
                    Style="{StaticResource Muted}"

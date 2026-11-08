@@ -2,23 +2,17 @@ using System.Text.Json.Serialization;
 
 namespace DropHarvester.Models.Auth;
 
-/// <summary>Response from POST https://id.twitch.tv/oauth2/device.</summary>
-public sealed class DeviceCodeResponse
+/// <summary>Outcome of logging in with a token from the browser sign-in.</summary>
+public enum TokenLoginResult
 {
-    [JsonPropertyName("device_code")] public string DeviceCode { get; set; } = "";
-    [JsonPropertyName("user_code")] public string UserCode { get; set; } = "";
-    [JsonPropertyName("verification_uri")] public string VerificationUri { get; set; } = "";
-    [JsonPropertyName("expires_in")] public int ExpiresIn { get; set; }
-    [JsonPropertyName("interval")] public int Interval { get; set; }
-}
-
-/// <summary>Successful response from POST https://id.twitch.tv/oauth2/token (device grant).</summary>
-public sealed class TokenResponse
-{
-    [JsonPropertyName("access_token")] public string AccessToken { get; set; } = "";
-    [JsonPropertyName("refresh_token")] public string? RefreshToken { get; set; }
-    [JsonPropertyName("expires_in")] public int ExpiresIn { get; set; }
-    [JsonPropertyName("token_type")] public string? TokenType { get; set; }
+    /// <summary>The token validated and the session is saved.</summary>
+    Success,
+    /// <summary>No access token could be found in the text that was handed in.</summary>
+    NoToken,
+    /// <summary>Twitch did not accept the token (revoked, expired, or unreachable).</summary>
+    Rejected,
+    /// <summary>The token belongs to a different Twitch client than the one the app runs as.</summary>
+    WrongClient,
 }
 
 /// <summary>Response from GET https://id.twitch.tv/oauth2/validate.</summary>

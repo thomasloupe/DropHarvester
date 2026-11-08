@@ -2,12 +2,13 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using DropHarvester.Models.Auth;
 using DropHarvester.Models.Twitch;
 
 namespace DropHarvester.Services.Twitch;
 
-/// <summary>Owns login state and drives Twitch's OAuth device-code flow.</summary>
+/// <summary>Owns login state: the token from Twitch's browser sign-in, its validation and persistence.</summary>
 public interface ITwitchAuth
 {
     AuthState State { get; }
@@ -16,16 +17,12 @@ public interface ITwitchAuth
     /// <summary>Raised (on any thread) whenever login state changes.</summary>
     event Action? AuthChanged;
 
-    /// <summary>Kick off a device-code login; returns the code + URL to show the user.</summary>
-    /// <param name="ct">Token to cancel the request.</param>
-    /// <returns>Device-code response with the user code and verification URL.</returns>
-    Task<DeviceCodeResponse> BeginDeviceLoginAsync(CancellationToken ct = default);
-
-    /// <summary>Poll until the user authorizes (or the code expires / is cancelled).</summary>
-    /// <param name="device">Device-code response to poll against.</param>
-    /// <param name="ct">Token to cancel polling.</param>
-    /// <returns>True once authorized and validated; false on expiry, denial, or cancellation.</returns>
-    Task<bool> AwaitAuthorizationAsync(DeviceCodeResponse device, CancellationToken ct = default);
+    /// <summary>Log in with the access token from the browser sign-in (<see cref="TwitchConstants.BrowserLoginUrl"/>):
+    /// validate it, require it to belong to the Android app client, and persist the session.</summary>
+    /// <param name="tokenOrUrl">The bare access token, or the whole twitch.tv address it arrived in.</param>
+    /// <param name="ct">Token to cancel the validation.</param>
+    /// <returns>Success when the session is saved; otherwise why the token was not used.</returns>
+    Task<TokenLoginResult> LogInWithTokenAsync(string tokenOrUrl, CancellationToken ct = default);
 
     /// <summary>Validate the stored token against Twitch; clears it on rejection. Returns true if valid.</summary>
     /// <param name="ct">Token to cancel the request.</param>
@@ -37,12 +34,16 @@ public interface ITwitchAuth
 }
 
 /// <summary>
-/// Device-code OAuth against id.twitch.tv. Logs in as the
-/// Android TV app client (which has the device grant enabled), then validates the token to learn
-/// the user id / login. The token is persisted via <see cref="IAuthStore"/> and reused on restart.
+/// Takes the access token produced by Twitch's browser sign-in (an implicit grant for the Android app
+/// client), validates it to learn the user id / login, and persists it via <see cref="IAuthStore"/> so it
+/// is reused on restart.
 /// </summary>
 public sealed class TwitchAuthService : ITwitchAuth, IDisposable
 {
+    // "access_token=<token>" in a redirect URL's fragment or query
+    static readonly Regex TokenInUrl = new(@"[#&?]access_token=([A-Za-z0-9]+)", RegexOptions.Compiled);
+    static readonly Regex BareToken = new(@"^[A-Za-z0-9]{20,64}$", RegexOptions.Compiled);
+
     readonly IAuthStore _store;
     readonly HttpClient _http;
 
@@ -66,86 +67,44 @@ public sealed class TwitchAuthService : ITwitchAuth, IDisposable
         _http = new HttpClient(HttpClientBuilder.CreateHandler(settings));
     }
 
-    /// <summary>Requests a device code from Twitch's OAuth device endpoint.</summary>
-    /// <param name="ct">Token to cancel the request.</param>
-    /// <returns>The device-code response from Twitch.</returns>
-    public async Task<DeviceCodeResponse> BeginDeviceLoginAsync(CancellationToken ct = default)
+    /// <summary>Pull the access token out of a browser sign-in redirect URL
+    /// (<c>https://www.twitch.tv/#access_token=...</c>).</summary>
+    /// <param name="url">The URL the sign-in page navigated to.</param>
+    /// <returns>The access token, or null when the URL is not the sign-in redirect.</returns>
+    public static string? TokenFromRedirectUrl(string? url)
     {
-        using var req = new HttpRequestMessage(HttpMethod.Post, TwitchConstants.OAuthDeviceUrl)
-        {
-            Content = new FormUrlEncodedContent(new Dictionary<string, string>
-            {
-                ["client_id"] = TwitchConstants.AndroidAppClientId,
-                ["scopes"] = TwitchConstants.OAuthScopes,
-            }),
-        };
-        ApplyOAuthHeaders(req);
-
-        using var resp = await _http.SendAsync(req, ct).ConfigureAwait(false);
-        resp.EnsureSuccessStatusCode();
-        var device = await resp.Content.ReadFromJsonAsync<DeviceCodeResponse>(cancellationToken: ct).ConfigureAwait(false)
-            ?? throw new InvalidOperationException("Empty device-code response from Twitch.");
-        return device;
+        if (string.IsNullOrEmpty(url)
+            || !url.StartsWith(TwitchConstants.BrowserLoginRedirectPrefix, StringComparison.OrdinalIgnoreCase))
+            return null;
+        var m = TokenInUrl.Match(url);
+        return m.Success ? m.Groups[1].Value : null;
     }
 
-    /// <summary>Polls the token endpoint at the server interval until the user authorizes or time runs out.</summary>
-    /// <param name="device">Device-code response being polled.</param>
-    /// <param name="ct">Token to cancel polling.</param>
-    /// <returns>True once authorized and validated; false on expiry, denial, or cancellation.</returns>
-    public async Task<bool> AwaitAuthorizationAsync(DeviceCodeResponse device, CancellationToken ct = default)
+    /// <summary>Validates a token from the browser sign-in and saves the session when it belongs to the
+    /// Android app client; anything else is discarded and the user stays logged out.</summary>
+    /// <param name="tokenOrUrl">The bare access token, or the whole twitch.tv address it arrived in.</param>
+    /// <param name="ct">Token to cancel the validation.</param>
+    /// <returns>Success when the session is saved; otherwise why the token was not used.</returns>
+    public async Task<TokenLoginResult> LogInWithTokenAsync(string tokenOrUrl, CancellationToken ct = default)
     {
-        // Poll no faster than the server-provided interval (default 5s), backing off on slow_down.
-        var interval = TimeSpan.FromSeconds(Math.Max(1, device.Interval == 0 ? 5 : device.Interval));
-        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(device.ExpiresIn > 0 ? device.ExpiresIn : 1800);
+        var text = tokenOrUrl?.Trim() ?? "";
+        var token = TokenFromRedirectUrl(text) ?? (BareToken.IsMatch(text) ? text : null);
+        if (token is null)
+            return TokenLoginResult.NoToken;
 
-        while (!ct.IsCancellationRequested && DateTimeOffset.UtcNow < deadline)
+        State.AccessToken = token;
+        if (!await ValidateAsync(ct).ConfigureAwait(false))
         {
-            await Task.Delay(interval, ct).ConfigureAwait(false);
-
-            using var req = new HttpRequestMessage(HttpMethod.Post, TwitchConstants.OAuthTokenUrl)
-            {
-                Content = new FormUrlEncodedContent(new Dictionary<string, string>
-                {
-                    ["client_id"] = TwitchConstants.AndroidAppClientId,
-                    ["device_code"] = device.DeviceCode,
-                    ["grant_type"] = TwitchConstants.DeviceCodeGrantType,
-                }),
-            };
-            ApplyOAuthHeaders(req);
-
-            using var resp = await _http.SendAsync(req, ct).ConfigureAwait(false);
-            if (resp.StatusCode == HttpStatusCode.OK)
-            {
-                var token = await resp.Content.ReadFromJsonAsync<TokenResponse>(cancellationToken: ct).ConfigureAwait(false);
-                if (token is not null && !string.IsNullOrEmpty(token.AccessToken))
-                {
-                    State.AccessToken = token.AccessToken;
-                    _store.Save(State);
-                    // Learn user id / login and confirm the token is good.
-                    return await ValidateAsync(ct).ConfigureAwait(false);
-                }
-            }
-            else
-            {
-                // 400 while pending; body carries the OAuth error message.
-                var message = await SafeReadOAuthMessageAsync(resp, ct).ConfigureAwait(false);
-                switch (message)
-                {
-                    case "authorization_pending":
-                        break; // keep waiting
-                    case "slow_down":
-                        interval += TimeSpan.FromSeconds(5);
-                        break;
-                    case "expired_token":
-                    case "access_denied":
-                        return false; // user declined or code expired
-                    default:
-                        break; // unknown -> keep trying until the deadline
-                }
-            }
+            LogOut();
+            return TokenLoginResult.Rejected;
         }
-
-        return false;
+        // GraphQL is sent as the Android app client, and Twitch only honors a token with its own client id.
+        if (!string.Equals(State.ClientId, TwitchConstants.AndroidAppClientId, StringComparison.Ordinal))
+        {
+            LogOut();
+            return TokenLoginResult.WrongClient;
+        }
+        return TokenLoginResult.Success;
     }
 
     /// <summary>Validates the token, populates user id/login/display name and persists; logs out on 401.</summary>
@@ -229,35 +188,6 @@ public sealed class TwitchAuthService : ITwitchAuth, IDisposable
         State = new AuthState { DeviceId = deviceId };
         _store.Save(State);
         AuthChanged?.Invoke();
-    }
-
-    /// <summary>Adds the Twitch client, device, and user-agent headers for OAuth requests.</summary>
-    /// <param name="req">Request the headers are added to.</param>
-    void ApplyOAuthHeaders(HttpRequestMessage req)
-    {
-        req.Headers.TryAddWithoutValidation("Accept", "application/json");
-        req.Headers.TryAddWithoutValidation("Client-Id", TwitchConstants.AndroidAppClientId);
-        req.Headers.TryAddWithoutValidation("User-Agent", TwitchConstants.AndroidUserAgent);
-        req.Headers.TryAddWithoutValidation("X-Device-Id", State.DeviceId);
-    }
-
-    /// <summary>Reads the OAuth error message from a response body, or null when unreadable.</summary>
-    /// <param name="resp">Response whose JSON body is parsed.</param>
-    /// <param name="ct">Token to cancel the read.</param>
-    /// <returns>The error message string, or null when the body is missing or malformed.</returns>
-    static async Task<string?> SafeReadOAuthMessageAsync(HttpResponseMessage resp, CancellationToken ct)
-    {
-        try
-        {
-            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
-            if (doc.RootElement.TryGetProperty("message", out var m))
-                return m.GetString();
-        }
-        catch
-        {
-            // ignore malformed error bodies
-        }
-        return null;
     }
 
     /// <summary>Generates a random lowercase 32-char hex device id.</summary>

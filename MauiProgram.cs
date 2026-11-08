@@ -43,6 +43,7 @@ public static class MauiProgram
         // "What's changed" popup: bundled changelog + newer-from-GitHub, shown modally from Status/Settings.
         builder.Services.AddSingleton<IChangelogService, ChangelogService>();
         builder.Services.AddSingleton<IChangelogPresenter, ChangelogPresenter>();
+        builder.Services.AddSingleton<ITwitchLoginPresenter, TwitchLoginPresenter>();
         builder.Services.AddTransient<ChangelogViewModel>();  // fresh load each time the popup opens
         builder.Services.AddTransient<ChangelogPage>();
         // The coordinator (instantiated at startup) subscribes to the bus and drives tray status,
