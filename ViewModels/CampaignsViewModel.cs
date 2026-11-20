@@ -12,7 +12,7 @@ namespace DropHarvester.ViewModels;
 
 /// <summary>
 /// The Inventory tab: fetches every drop campaign from Twitch and shows them with their drops
-/// and progress, filterable by status/link/finished.
+/// and progress, filterable by status/link/finished and searchable by game name.
 /// </summary>
 public partial class CampaignsViewModel : ObservableViewModel
 {
@@ -230,6 +230,14 @@ public partial class CampaignsViewModel : ObservableViewModel
     /// <param name="value">the new toggle value.</param>
     partial void OnShowSubOnlyChanged(bool value) => ApplyFilters();
 
+    /// <summary>Game-name search text; when non-blank, only campaigns whose game name contains it
+    /// (case-insensitive) are shown, on top of the filter toggles.</summary>
+    [ObservableProperty] private string _searchText = "";
+
+    /// <summary>Re-applies the filters as the search text changes.</summary>
+    /// <param name="value">the new search text.</param>
+    partial void OnSearchTextChanged(string value) => ApplyFilters();
+
     /// <summary>Called on first appearance; loads once if empty.</summary>
     public async Task EnsureLoadedAsync()
     {
@@ -297,13 +305,18 @@ public partial class CampaignsViewModel : ObservableViewModel
         }
     }
 
-    /// <summary>Rebuilds the visible Campaigns collection from the full list per the current filter toggles.</summary>
+    /// <summary>Rebuilds the visible Campaigns collection from the full list per the current filter toggles
+    /// and the game-name search text.</summary>
     void ApplyFilters()
     {
         var excluded = _settings.Settings.ExcludedGames.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var search = (SearchText ?? "").Trim();
 
         var view = _all.Where(c =>
         {
+            if (search.Length > 0 && !c.Game.Name.Contains(search, StringComparison.CurrentCultureIgnoreCase))
+                return false;
+
             // Sub-only campaigns (nothing earnable by watching) live ONLY under the opt-in Sub-Only filter,
             // so they don't clutter the normal view with rewards that cost money.
             if (c.IsSubscriptionOnly)

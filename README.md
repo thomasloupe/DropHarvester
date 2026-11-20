@@ -45,6 +45,7 @@ so it earns drops on near-zero bandwidth. Modern UI with a number of extra featu
 ### Inventory & status
 
 - **Live inventory** - the Campaigns tab shows every campaign and drop with live progress, and a purple **Harvesting** badge on the one being harvested now.
+- **Game search** - type in the Inventory search box to show only campaigns whose game name matches.
 - **Subscription drops** - drops that need a channel sub are auto-detected and get a purple **SUB** badge; DropHarvester verifies whether you already qualify and skips the ones you don't, and drops earned by subscribing alone show a **Buy Drop** link. Sub-only campaigns sit under an opt-in **Sub-Only** filter.
 - **Claim-based campaign tabs** - each campaign sits in one tab: **Finished** (every reward claimed), **Expired** (past its end date), or **Upcoming** (anything still earnable). Claim attribution handles reward ids reused across concurrent campaigns so a still-earnable campaign is never wrongly marked done.
 - **Language** - a Settings dropdown switches the UI language live: English, Español, Français, Deutsch, Русский, 简体中文, 日本語, 한국어, Nederlands. Diagnostic logs stay English.

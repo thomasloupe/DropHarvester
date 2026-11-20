@@ -1,5 +1,9 @@
 [
   {
+    "version": "1.26.0",
+    "notes": "NEW - Search the Inventory by game name"
+  },
+  {
     "version": "1.25.0",
     "notes": "FIX - Twitch login works again\nFIX - Drops stalling with the not-credited banner\nCHANGE - Log in through a Twitch sign-in window\nCHANGE - Docker login takes the sign-in address via DH_TWITCH_TOKEN or login.txt"
   },

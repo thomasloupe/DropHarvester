@@ -73,6 +73,7 @@ public static partial class LocStrings
         ["Campaigns_Excluded"] = "Exclues",
         ["Campaigns_Deduped"] = "Dédupliquées",
         ["Campaigns_SubOnly"] = "Abonnés uniquement",
+        ["Campaigns_SearchPlaceholder"] = "Rechercher par nom de jeu",
         ["Campaigns_NoMatch"] = "Aucune campagne ne correspond aux filtres actuels.",
         ["Campaigns_Harvesting"] = "Récolte en cours",
         ["Campaigns_Claimed"] = "Réclamées",
